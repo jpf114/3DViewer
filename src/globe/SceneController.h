@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 
@@ -22,6 +23,7 @@ public:
     bool hasBaseLayer() const;
     bool hasMapNode() const;
     bool hasViewer() const;
+    bool isLayerVisibleInScene(const std::string &id) const;
     bool isInitialized() const;
     void mouseMove(float x, float y);
     void mousePress(float x, float y, unsigned int button);
@@ -29,6 +31,7 @@ public:
     void mouseScroll(bool scrollUp);
     PickResult pickAt(int x, int y) const;
     void removeLayer(const std::string &id);
+    std::size_t renderedLayerCount() const;
     void resize(int width, int height);
     void syncLayerState(const std::shared_ptr<Layer> &layer);
     void initializeDefaultScene(int width, int height);

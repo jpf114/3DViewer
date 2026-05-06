@@ -3,10 +3,12 @@
 #include <osg/Camera>
 #include <osg/Viewport>
 #include <osgEarth/EarthManipulator>
+#include <osgEarth/GDAL>
 #include <osgEarth/Map>
 #include <osgEarth/MapNode>
 #include <osgEarth/Profile>
 #include <osgEarth/URI>
+#include <osgEarth/VisibleLayer>
 #include <osgEarth/XYZ>
 #include <osgGA/EventQueue>
 #include <osgViewer/GraphicsWindow>
@@ -18,6 +20,7 @@
 struct SceneController::Impl {
     bool initialized = false;
     std::unordered_map<std::string, bool> layerVisibility;
+    std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
     osg::ref_ptr<osgViewer::Viewer> viewer;
@@ -33,6 +36,39 @@ osg::ref_ptr<osgEarth::XYZImageLayer> createBaseLayer() {
     layer->setURL(osgEarth::URI("https://tile.openstreetmap.org/{z}/{x}/{y}.png"));
     layer->setProfile(osgEarth::Profile::create(osgEarth::Profile::SPHERICAL_MERCATOR));
     return layer;
+}
+
+osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
+    switch (layer.kind()) {
+    case LayerKind::Imagery: {
+        auto imageLayer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
+        imageLayer->setName(layer.name());
+        imageLayer->setURL(osgEarth::URI(layer.sourceUri()));
+        return imageLayer;
+    }
+    case LayerKind::Elevation: {
+        auto elevationLayer = osg::ref_ptr<osgEarth::GDALElevationLayer>(new osgEarth::GDALElevationLayer());
+        elevationLayer->setName(layer.name());
+        elevationLayer->setURL(osgEarth::URI(layer.sourceUri()));
+        return elevationLayer;
+    }
+    case LayerKind::Vector:
+    case LayerKind::Chart:
+    case LayerKind::Scientific:
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
+void syncVisibleState(osgEarth::Layer *sceneLayer, const Layer &layer) {
+    auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer);
+    if (visibleLayer == nullptr) {
+        return;
+    }
+
+    visibleLayer->setVisible(layer.visible());
+    visibleLayer->setOpacity(static_cast<float>(layer.opacity()));
 }
 
 void updateViewport(osgViewer::Viewer &viewer, osgViewer::GraphicsWindowEmbedded &graphicsWindow, int width, int height) {
@@ -53,6 +89,19 @@ SceneController &SceneController::operator=(SceneController &&) noexcept = defau
 
 void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     impl_->layerVisibility[layer->id()] = layer->visible();
+
+    if (!impl_->map || impl_->renderLayers.contains(layer->id())) {
+        return;
+    }
+
+    auto sceneLayer = createSceneLayer(*layer);
+    if (!sceneLayer) {
+        return;
+    }
+
+    syncVisibleState(sceneLayer.get(), *layer);
+    impl_->map->addLayer(sceneLayer.get());
+    impl_->renderLayers[layer->id()] = sceneLayer;
 }
 
 void SceneController::frame() {
@@ -73,6 +122,16 @@ bool SceneController::hasMapNode() const {
 
 bool SceneController::hasViewer() const {
     return impl_->viewer.valid();
+}
+
+bool SceneController::isLayerVisibleInScene(const std::string &id) const {
+    const auto it = impl_->renderLayers.find(id);
+    if (it == impl_->renderLayers.end()) {
+        return false;
+    }
+
+    const auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(it->second.get());
+    return visibleLayer != nullptr && visibleLayer->getVisible();
 }
 
 bool SceneController::isInitialized() const {
@@ -123,6 +182,20 @@ PickResult SceneController::pickAt(int x, int y) const {
 
 void SceneController::removeLayer(const std::string &id) {
     impl_->layerVisibility.erase(id);
+
+    const auto it = impl_->renderLayers.find(id);
+    if (it == impl_->renderLayers.end()) {
+        return;
+    }
+
+    if (impl_->map) {
+        impl_->map->removeLayer(it->second.get());
+    }
+    impl_->renderLayers.erase(it);
+}
+
+std::size_t SceneController::renderedLayerCount() const {
+    return impl_->renderLayers.size();
 }
 
 void SceneController::resize(int width, int height) {
@@ -135,6 +208,13 @@ void SceneController::resize(int width, int height) {
 
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     impl_->layerVisibility[layer->id()] = layer->visible();
+
+    const auto it = impl_->renderLayers.find(layer->id());
+    if (it == impl_->renderLayers.end()) {
+        return;
+    }
+
+    syncVisibleState(it->second.get(), *layer);
 }
 
 void SceneController::initializeDefaultScene(int width, int height) {

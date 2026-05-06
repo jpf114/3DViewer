@@ -2,6 +2,8 @@
 #include <iostream>
 
 #include "globe/SceneController.h"
+#include "layers/ElevationLayer.h"
+#include "layers/ImageryLayer.h"
 
 int main() {
     SceneController controller;
@@ -24,6 +26,23 @@ int main() {
 
     if (!controller.hasBaseLayer()) {
         std::cerr << "Expected scene controller to add a base imagery layer.\n";
+        return EXIT_FAILURE;
+    }
+
+    const auto imageryLayer = std::make_shared<ImageryLayer>("imagery-1", "Imagery 1", "missing-imagery.tif");
+    const auto elevationLayer = std::make_shared<ElevationLayer>("elevation-1", "Elevation 1", "missing-dem.tif");
+    controller.addLayer(imageryLayer);
+    controller.addLayer(elevationLayer);
+
+    if (controller.renderedLayerCount() != 2) {
+        std::cerr << "Expected scene controller to create two render layers.\n";
+        return EXIT_FAILURE;
+    }
+
+    imageryLayer->setVisible(false);
+    controller.syncLayerState(imageryLayer);
+    if (controller.isLayerVisibleInScene("imagery-1")) {
+        std::cerr << "Expected scene controller visibility to follow app layer state.\n";
         return EXIT_FAILURE;
     }
 
