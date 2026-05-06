@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QStringList>
 #include <QMainWindow>
 
 class GlobeWidget;
@@ -21,6 +22,7 @@ signals:
     void importDataRequested(const QString &path);
     void layerSelected(const QString &layerId);
     void layerVisibilityChanged(const QString &layerId, bool visible);
+    void layerOrderChanged(const QStringList &orderedLayerIds);
 
 private:
     GlobeWidget *globeWidget_;

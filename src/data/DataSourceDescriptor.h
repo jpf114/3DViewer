@@ -1,6 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <string>
+
+#include "layers/GeographicBounds.h"
 
 enum class DataSourceKind {
     RasterImagery,
@@ -13,4 +16,5 @@ struct DataSourceDescriptor {
     std::string name;
     std::string path;
     DataSourceKind kind;
+    std::optional<GeographicBounds> geographicBounds;
 };

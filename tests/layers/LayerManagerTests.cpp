@@ -19,5 +19,17 @@ int main() {
         return 1;
     }
 
-    return manager.layers().size() == 2 && manager.layers().front()->id() == "roads" ? 0 : 1;
+    if (manager.layers().size() != 2 || manager.layers().front()->id() != "roads") {
+        return 1;
+    }
+
+    if (!manager.reorderLayers({"world", "roads"})) {
+        return 2;
+    }
+
+    if (manager.layers()[0]->id() != "world" || manager.layers()[1]->id() != "roads") {
+        return 3;
+    }
+
+    return 0;
 }

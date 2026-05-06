@@ -1,6 +1,9 @@
 #pragma once
 
+#include <QStringList>
 #include <string>
+
+#include "globe/PickResult.h"
 
 class DataImporter;
 class LayerManager;
@@ -19,6 +22,9 @@ public:
     void setLayerVisibility(const std::string &layerId, bool visible);
 
 private:
+    void applyLayerOrderFromUi(const QStringList &orderedIds);
+    void handleTerrainPick(const PickResult &pick);
+
     MainWindow &window_;
     SceneController &sceneController_;
     LayerManager &layerManager_;

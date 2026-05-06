@@ -4,9 +4,12 @@
 #include <cstddef>
 #include <string>
 #include <unordered_map>
+#include <vector>
+
+#include "layers/GeographicBounds.h"
+#include "layers/Layer.h"
 
 struct PickResult;
-class Layer;
 
 class SceneController {
 public:
@@ -36,6 +39,8 @@ public:
     void resize(int width, int height);
     void syncLayerState(const std::shared_ptr<Layer> &layer);
     void initializeDefaultScene(int width, int height);
+    void flyToGeographicBounds(const GeographicBounds &bounds, double durationSeconds = 1.5);
+    void reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder);
 
 private:
     struct Impl;

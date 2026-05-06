@@ -1,7 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
+#include "layers/GeographicBounds.h"
 #include "layers/LayerTypes.h"
 
 class Layer {
@@ -19,6 +21,9 @@ public:
     void setVisible(bool visible);
     void setOpacity(double opacity);
 
+    void setGeographicBounds(const GeographicBounds &bounds);
+    std::optional<GeographicBounds> geographicBounds() const;
+
 private:
     std::string id_;
     std::string name_;
@@ -26,4 +31,5 @@ private:
     LayerKind kind_;
     bool visible_ = true;
     double opacity_ = 1.0;
+    std::optional<GeographicBounds> geographicBounds_;
 };

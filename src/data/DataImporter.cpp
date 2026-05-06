@@ -1,6 +1,7 @@
 #include "data/DataImporter.h"
 
 #include <memory>
+#include <spdlog/spdlog.h>
 
 #include "layers/ElevationLayer.h"
 #include "layers/ImageryLayer.h"
@@ -9,6 +10,7 @@
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
     const auto descriptor = inspector_.inspect(path);
     if (!descriptor.has_value()) {
+        spdlog::warn("DataImporter: failed to inspect path: {}", path);
         return nullptr;
     }
 
@@ -16,14 +18,22 @@ std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
 }
 
 std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descriptor) const {
+    std::shared_ptr<Layer> layer;
     switch (descriptor.kind) {
     case DataSourceKind::RasterImagery:
-        return std::make_shared<ImageryLayer>(descriptor.id, descriptor.name, descriptor.path);
+        layer = std::make_shared<ImageryLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
     case DataSourceKind::RasterElevation:
-        return std::make_shared<ElevationLayer>(descriptor.id, descriptor.name, descriptor.path);
+        layer = std::make_shared<ElevationLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
     case DataSourceKind::Vector:
-        return std::make_shared<VectorLayer>(descriptor.id, descriptor.name, descriptor.path);
+        layer = std::make_shared<VectorLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
     }
 
-    return nullptr;
+    if (layer && descriptor.geographicBounds.has_value() && descriptor.geographicBounds->isValid()) {
+        layer->setGeographicBounds(*descriptor.geographicBounds);
+    }
+
+    return layer;
 }

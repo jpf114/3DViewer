@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMetaType>
 #include <string>
 
 struct PickResult {
@@ -10,3 +11,5 @@ struct PickResult {
     std::string layerId;
     std::string displayText;
 };
+
+Q_DECLARE_METATYPE(PickResult)

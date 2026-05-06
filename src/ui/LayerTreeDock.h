@@ -15,7 +15,10 @@ public:
 signals:
     void layerSelected(const QString &layerId);
     void layerVisibilityChanged(const QString &layerId, bool visible);
+    void layerOrderChanged(const QStringList &orderedLayerIds);
 
 private:
+    void emitLayerOrderFromTree();
+
     QTreeWidget *tree_;
 };

@@ -10,9 +10,20 @@
 #include "globe/PickResult.h"
 #include "tools/ToolManager.h"
 
+namespace {
+
+unsigned int mapQtButton(Qt::MouseButton button) {
+    if (button == Qt::LeftButton) return 1;
+    if (button == Qt::MiddleButton) return 2;
+    if (button == Qt::RightButton) return 3;
+    return 0;
+}
+
+}
+
 GlobeWidget::GlobeWidget(QWidget *parent)
     : QWidget(parent),
-      toolManager_(new ToolManager()),
+      toolManager_(new ToolManager(this)),
       frameTimer_(new QTimer(this)) {
     setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_OpaquePaintEvent);
@@ -33,10 +44,11 @@ ToolManager &GlobeWidget::toolManager() {
 }
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
-    sceneController_.mouseMove(static_cast<float>(event->position().x()), flipY(static_cast<float>(event->position().y())));
-    const PickResult pick = sceneController_.pickAt(
-        static_cast<int>(event->position().x()),
-        static_cast<int>(flipY(static_cast<float>(event->position().y()))));
+    const float fx = static_cast<float>(event->position().x());
+    const float fy = flipY(static_cast<float>(event->position().y()));
+    sceneController_.mouseMove(fx, fy);
+
+    const PickResult pick = sceneController_.pickAt(static_cast<int>(fx), static_cast<int>(fy));
     if (pick.hit) {
         emit cursorTextChanged(QString("Lon: %1, Lat: %2, Elev: %3")
                                    .arg(pick.longitude, 0, 'f', 6)
@@ -50,34 +62,32 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void GlobeWidget::mousePressEvent(QMouseEvent *event) {
-    unsigned int button = 0;
-    if (event->button() == Qt::LeftButton) {
-        button = 1;
-    } else if (event->button() == Qt::MiddleButton) {
-        button = 2;
-    } else if (event->button() == Qt::RightButton) {
-        button = 3;
-    }
+    const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
-        sceneController_.mousePress(static_cast<float>(event->position().x()), flipY(static_cast<float>(event->position().y())), button);
+        sceneController_.mousePress(
+            static_cast<float>(event->position().x()),
+            flipY(static_cast<float>(event->position().y())),
+            button);
     }
     toolManager().mousePressEvent(*this, event);
     QWidget::mousePressEvent(event);
 }
 
 void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
-    unsigned int button = 0;
-    if (event->button() == Qt::LeftButton) {
-        button = 1;
-    } else if (event->button() == Qt::MiddleButton) {
-        button = 2;
-    } else if (event->button() == Qt::RightButton) {
-        button = 3;
-    }
+    const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
-        sceneController_.mouseRelease(static_cast<float>(event->position().x()), flipY(static_cast<float>(event->position().y())), button);
+        sceneController_.mouseRelease(
+            static_cast<float>(event->position().x()),
+            flipY(static_cast<float>(event->position().y())),
+            button);
     }
     toolManager().mouseReleaseEvent(*this, event);
+    if (event->button() == Qt::LeftButton) {
+        const float fx = static_cast<float>(event->position().x());
+        const float fy = flipY(static_cast<float>(event->position().y()));
+        const PickResult pick = sceneController_.pickAt(static_cast<int>(fx), static_cast<int>(fy));
+        emit terrainPickCompleted(pick);
+    }
     QWidget::mouseReleaseEvent(event);
 }
 
@@ -94,8 +104,8 @@ void GlobeWidget::resizeEvent(QResizeEvent *event) {
 void GlobeWidget::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
 
-    const int sceneWidth = std::max(1, width());
-    const int sceneHeight = std::max(1, height());
+    const int sceneWidth = (std::max)(1, width());
+    const int sceneHeight = (std::max)(1, height());
     if (!sceneController_.isInitialized()) {
         sceneController_.initializeDefaultScene(sceneWidth, sceneHeight);
     }

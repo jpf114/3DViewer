@@ -54,6 +54,6 @@ add_executable(DataImporterTests
 )
 
 target_include_directories(DataImporterTests PRIVATE ../src)
-target_link_libraries(DataImporterTests PRIVATE GDAL::GDAL)
+target_link_libraries(DataImporterTests PRIVATE GDAL::GDAL spdlog::spdlog)
 
 add_test(NAME DataImporterTests COMMAND DataImporterTests)

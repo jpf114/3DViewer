@@ -5,8 +5,10 @@
 #include <osg/Viewport>
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
+#include <osgEarth/Viewpoint>
 #include <osgEarth/FeatureModelLayer>
 #include <osgEarth/Fill>
+#include <osgEarth/GLUtils>
 #include <osgEarth/GDAL>
 #include <osgEarth/GeoData>
 #include <osgEarth/LineSymbol>
@@ -23,6 +25,9 @@
 #include <osgEarth/URI>
 #include <osgEarth/VisibleLayer>
 #include <osgEarth/XYZ>
+#include <algorithm>
+#include <cmath>
+
 #include <osgGA/EventQueue>
 #include <osgViewer/GraphicsWindow>
 #include <osgViewer/Viewer>
@@ -136,6 +141,27 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     syncVisibleState(sceneLayer.get(), *layer);
     impl_->map->addLayer(sceneLayer.get());
     impl_->renderLayers[layer->id()] = sceneLayer;
+}
+
+void SceneController::reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder) {
+    if (!impl_->map) {
+        return;
+    }
+
+    constexpr unsigned kBaseLayerCount = 1u;
+    impl_->map->beginUpdate();
+    unsigned targetIndex = kBaseLayerCount;
+    for (const auto &userLayer : userLayersInOrder) {
+        const auto it = impl_->renderLayers.find(userLayer->id());
+        if (it == impl_->renderLayers.end()) {
+            continue;
+        }
+
+        osgEarth::Layer *ol = it->second.get();
+        impl_->map->moveLayer(ol, targetIndex);
+        ++targetIndex;
+    }
+    impl_->map->endUpdate();
 }
 
 void SceneController::attachToNativeWindow(void *windowHandle, int width, int height) {
@@ -300,6 +326,34 @@ void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     syncVisibleState(it->second.get(), *layer);
 }
 
+void SceneController::flyToGeographicBounds(const GeographicBounds &bounds, double durationSeconds) {
+    if (!impl_->viewer) {
+        return;
+    }
+
+    auto *em = dynamic_cast<osgEarth::EarthManipulator *>(impl_->viewer->getCameraManipulator());
+    if (em == nullptr) {
+        return;
+    }
+
+    if (!bounds.isValid()) {
+        return;
+    }
+
+    const double lat = 0.5 * (bounds.south + bounds.north);
+    const double lon = 0.5 * (bounds.west + bounds.east);
+    const double latRad = lat * 3.14159265358979323846 / 180.0;
+    constexpr double kMetersPerDegLat = 111320.0;
+    const double mPerDegLon = (std::max)(1e-6, kMetersPerDegLat * std::cos(latRad));
+    const double widthM = (bounds.east - bounds.west) * mPerDegLon;
+    const double heightM = (bounds.north - bounds.south) * kMetersPerDegLat;
+    const double maxDim = (std::max)(widthM, heightM);
+    const double range = std::clamp(maxDim * 1.75, 200.0, 4.0e7);
+
+    osgEarth::Viewpoint vp("layer-extent", lon, lat, 0.0, 0.0, -90.0, range);
+    em->setViewpoint(vp, durationSeconds);
+}
+
 void SceneController::initializeDefaultScene(int width, int height) {
     if (impl_->initialized) {
         return;
@@ -311,6 +365,7 @@ void SceneController::initializeDefaultScene(int width, int height) {
 
     impl_->mapNode = new osgEarth::MapNode(impl_->map.get());
     impl_->viewer = new osgViewer::Viewer();
+    impl_->viewer->setRealizeOperation(new osgEarth::GL3RealizeOperation());
     impl_->viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
     impl_->viewer->setCameraManipulator(new osgEarth::EarthManipulator());
     impl_->viewer->setSceneData(impl_->mapNode.get());

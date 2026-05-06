@@ -4,8 +4,10 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <vector>
 
 #include "app/MainWindow.h"
+#include "globe/GlobeWidget.h"
 #include "data/DataImporter.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
@@ -40,16 +42,24 @@ ApplicationController::ApplicationController(MainWindow &window,
       sceneController_(sceneController),
       layerManager_(layerManager),
       importer_(importer) {
-    QObject::connect(&window_, &MainWindow::importDataRequested, &window_, [this](const QString &path) {
+    QObject::connect(&window_, &MainWindow::importDataRequested, [this](const QString &path) {
         importFile(path.toStdString());
     });
 
-    QObject::connect(&window_, &MainWindow::layerSelected, &window_, [this](const QString &layerId) {
+    QObject::connect(&window_, &MainWindow::layerSelected, [this](const QString &layerId) {
         showLayerDetails(layerId.toStdString());
     });
 
-    QObject::connect(&window_, &MainWindow::layerVisibilityChanged, &window_, [this](const QString &layerId, bool visible) {
+    QObject::connect(&window_, &MainWindow::layerVisibilityChanged, [this](const QString &layerId, bool visible) {
         setLayerVisibility(layerId.toStdString(), visible);
+    });
+
+    QObject::connect(&window_, &MainWindow::layerOrderChanged, [this](const QStringList &orderedIds) {
+        applyLayerOrderFromUi(orderedIds);
+    });
+
+    QObject::connect(window_.globeWidget(), &GlobeWidget::terrainPickCompleted, [this](const PickResult &pick) {
+        handleTerrainPick(pick);
     });
 }
 
@@ -63,6 +73,10 @@ void ApplicationController::importFile(const std::string &path) {
     layerManager_.addLayer(layer);
     sceneController_.addLayer(layer);
     window_.addLayerRow(*layer);
+
+    if (const auto bounds = layer->geographicBounds(); bounds.has_value() && bounds->isValid()) {
+        sceneController_.flyToGeographicBounds(*bounds);
+    }
 }
 
 void ApplicationController::showLayerDetails(const std::string &layerId) {
@@ -72,13 +86,13 @@ void ApplicationController::showLayerDetails(const std::string &layerId) {
         return;
     }
 
-    const QStringList lines = {
-        QString("Name: %1").arg(QString::fromStdString(layer->name())),
-        QString("ID: %1").arg(QString::fromStdString(layer->id())),
-        QString("Type: %1").arg(layerKindToText(layer->kind())),
-        QString("Source: %1").arg(QString::fromStdString(layer->sourceUri())),
-        QString("Visible: %1").arg(layer->visible() ? "Yes" : "No"),
-        QString("Opacity: %1").arg(layer->opacity(), 0, 'f', 2)};
+    QStringList lines;
+    lines.append(QString("Name: %1").arg(QString::fromStdString(layer->name())));
+    lines.append(QString("ID: %1").arg(QString::fromStdString(layer->id())));
+    lines.append(QString("Type: %1").arg(layerKindToText(layer->kind())));
+    lines.append(QString("Source: %1").arg(QString::fromStdString(layer->sourceUri())));
+    lines.append(QString("Visible: %1").arg(layer->visible() ? "Yes" : "No"));
+    lines.append(QString("Opacity: %1").arg(layer->opacity(), 0, 'f', 2));
     window_.showLayerDetails(lines.join('\n'));
 }
 
@@ -89,4 +103,37 @@ void ApplicationController::setLayerVisibility(const std::string &layerId, bool 
         sceneController_.syncLayerState(layer);
         showLayerDetails(layerId);
     }
+}
+
+void ApplicationController::applyLayerOrderFromUi(const QStringList &orderedIds) {
+    std::vector<std::string> ids;
+    ids.reserve(static_cast<std::size_t>(orderedIds.size()));
+    for (const QString &q : orderedIds) {
+        ids.push_back(q.toStdString());
+    }
+
+    if (!layerManager_.reorderLayers(ids)) {
+        return;
+    }
+
+    sceneController_.reorderUserLayers(layerManager_.layers());
+}
+
+void ApplicationController::handleTerrainPick(const PickResult &pick) {
+    if (!pick.hit) {
+        window_.showLayerDetails("Pick: no terrain hit under cursor.");
+        return;
+    }
+
+    QStringList lines;
+    lines.append(QString("Lon: %1").arg(pick.longitude, 0, 'f', 6));
+    lines.append(QString("Lat: %1").arg(pick.latitude, 0, 'f', 6));
+    lines.append(QString("Elev (approx): %1").arg(pick.elevation, 0, 'f', 2));
+    if (!pick.layerId.empty()) {
+        lines.append(QString("Layer ID: %1").arg(QString::fromStdString(pick.layerId)));
+    }
+    if (!pick.displayText.empty()) {
+        lines.append(QString::fromStdString(pick.displayText));
+    }
+    window_.showLayerDetails(lines.join('\n'));
 }

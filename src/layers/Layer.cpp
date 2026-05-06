@@ -1,5 +1,6 @@
 #include "layers/Layer.h"
 
+#include <algorithm>
 #include <utility>
 
 Layer::Layer(std::string id, std::string name, std::string sourceUri, LayerKind kind)
@@ -37,5 +38,13 @@ void Layer::setVisible(bool visible) {
 }
 
 void Layer::setOpacity(double opacity) {
-    opacity_ = opacity;
+    opacity_ = std::clamp(opacity, 0.0, 1.0);
+}
+
+void Layer::setGeographicBounds(const GeographicBounds &bounds) {
+    geographicBounds_ = bounds;
+}
+
+std::optional<GeographicBounds> Layer::geographicBounds() const {
+    return geographicBounds_;
 }

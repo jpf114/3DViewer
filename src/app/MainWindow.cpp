@@ -25,7 +25,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *importAction = menuBar()->addAction("Import Data...");
     connect(importAction, &QAction::triggered, this, [this]() {
-        const QString path = QFileDialog::getOpenFileName(this, "Import Data");
+        const QString filter =
+            "GIS Data (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;"
+            "Vector Data (*.shp *.geojson *.gpkg *.kml *.gml *.json);;"
+            "All Files (*)";
+        const QString path = QFileDialog::getOpenFileName(this, "Import Data", QString(), filter);
         if (!path.isEmpty()) {
             emit importDataRequested(path);
         }
@@ -33,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(layerDock_, &LayerTreeDock::layerSelected, this, &MainWindow::layerSelected);
     connect(layerDock_, &LayerTreeDock::layerVisibilityChanged, this, &MainWindow::layerVisibilityChanged);
+    connect(layerDock_, &LayerTreeDock::layerOrderChanged, this, &MainWindow::layerOrderChanged);
     connect(globeWidget_, &GlobeWidget::cursorTextChanged, statusController_, &StatusBarController::setCursorText);
     propertyDock_->showText("No layer selected.");
 }

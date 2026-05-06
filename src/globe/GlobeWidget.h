@@ -3,6 +3,7 @@
 #include <QString>
 #include <QWidget>
 
+#include "globe/PickResult.h"
 #include "globe/SceneController.h"
 
 class ToolManager;
@@ -19,6 +20,7 @@ public:
 
 signals:
     void cursorTextChanged(const QString &text);
+    void terrainPickCompleted(const PickResult &result);
 
 protected:
     void mouseMoveEvent(QMouseEvent *event) override;

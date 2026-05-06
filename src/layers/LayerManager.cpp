@@ -1,6 +1,7 @@
 #include "layers/LayerManager.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include "layers/Layer.h"
 
@@ -27,6 +28,35 @@ void LayerManager::moveLayer(std::size_t from, std::size_t to) {
     const auto layer = layers_[from];
     layers_.erase(layers_.begin() + static_cast<std::ptrdiff_t>(from));
     layers_.insert(layers_.begin() + static_cast<std::ptrdiff_t>(to), layer);
+}
+
+bool LayerManager::reorderLayers(const std::vector<std::string> &orderedIds) {
+    if (orderedIds.size() != layers_.size()) {
+        return false;
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<Layer>> byId;
+    byId.reserve(layers_.size());
+    for (const auto &layer : layers_) {
+        byId[layer->id()] = layer;
+    }
+
+    if (byId.size() != layers_.size()) {
+        return false;
+    }
+
+    std::vector<std::shared_ptr<Layer>> next;
+    next.reserve(orderedIds.size());
+    for (const auto &id : orderedIds) {
+        const auto it = byId.find(id);
+        if (it == byId.end()) {
+            return false;
+        }
+        next.push_back(it->second);
+    }
+
+    layers_ = std::move(next);
+    return true;
 }
 
 void LayerManager::setVisibility(const std::string &id, bool visible) {

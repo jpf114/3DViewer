@@ -2,7 +2,8 @@
 
 #include "tools/PanTool.h"
 
-ToolManager::ToolManager() : currentTool_(std::make_unique<PanTool>()) {}
+ToolManager::ToolManager(QObject *parent)
+    : parent_(parent), currentTool_(std::make_unique<PanTool>()) {}
 
 void ToolManager::mouseMoveEvent(GlobeWidget &widget, QMouseEvent *event) {
     currentTool_->mouseMoveEvent(widget, event);

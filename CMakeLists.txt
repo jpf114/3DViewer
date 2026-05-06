@@ -5,6 +5,25 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_INSTALL_DEFAULT_CONFIG_NAME "Release" CACHE STRING
+    "Default configuration for cmake --install (and build) when none is given.")
+endif()
+
+if(NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+endif()
+if(NOT DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+endif()
+if(NOT DEFINED CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+endif()
+
+if(NOT CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenSceneGraph REQUIRED COMPONENTS osg osgDB osgGA osgUtil osgViewer)
 find_package(osgEarth CONFIG REQUIRED)
@@ -12,6 +31,9 @@ find_package(GDAL CONFIG REQUIRED)
 find_package(PROJ CONFIG REQUIRED)
 find_package(GEOS CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/RuntimeDeployment.cmake")
 
 qt_standard_project_setup()
 
@@ -49,26 +71,26 @@ target_link_libraries(ThreeDViewer
         spdlog::spdlog
 )
 
-get_target_property(QT6_CORE_DLL_RELEASE Qt6::Core IMPORTED_LOCATION_RELEASE)
-get_target_property(QT6_CORE_DLL_DEBUG Qt6::Core IMPORTED_LOCATION_DEBUG)
+threeviewer_runtime_post_build(ThreeDViewer)
 
-get_filename_component(QT6_BIN_DIR_RELEASE "${QT6_CORE_DLL_RELEASE}" DIRECTORY)
-get_filename_component(QT6_BIN_DIR_DEBUG "${QT6_CORE_DLL_DEBUG}" DIRECTORY)
-
-set(QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE "${QT6_BIN_DIR_RELEASE}/../Qt6/plugins/platforms/qwindows.dll")
-set(QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG "${QT6_BIN_DIR_DEBUG}/../Qt6/plugins/platforms/qwindowsd.dll")
-
-add_custom_command(TARGET ThreeDViewer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ThreeDViewer>/platforms"
+if(WIN32)
+  add_custom_command(TARGET ThreeDViewer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<$<CONFIG:Debug>:${QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE}>"
-        "$<TARGET_FILE_DIR:ThreeDViewer>/platforms/"
-    VERBATIM
-)
+      "${CMAKE_CURRENT_SOURCE_DIR}/packaging/fonts.conf"
+      "$<TARGET_FILE_DIR:ThreeDViewer>/fonts.conf"
+    COMMENT "Minimal fontconfig (FONTCONFIG_FILE) for Windows")
+endif()
 
 enable_testing()
 add_subdirectory(tests)
 
-install(TARGETS ThreeDViewer RUNTIME DESTINATION .)
-install(FILES "${QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE}" CONFIGURATIONS Release DESTINATION platforms)
-install(FILES "${QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG}" CONFIGURATIONS Debug DESTINATION platforms)
+if(WIN32)
+  threeviewer_install_target_release_only(ThreeDViewer)
+  threeviewer_install_qt_windows_platform_release()
+  threeviewer_install_runtime_data_release()
+  threeviewer_install_windows_packaging_extras()
+  threeviewer_install_vcpkg_minimal_runtime()
+else()
+  install(TARGETS ThreeDViewer RUNTIME DESTINATION bin)
+endif()
+threeviewer_install_windeployqt_at_install()
