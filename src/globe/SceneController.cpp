@@ -8,6 +8,7 @@
 #include <osgEarth/FeatureModelLayer>
 #include <osgEarth/Fill>
 #include <osgEarth/GDAL>
+#include <osgEarth/GeoData>
 #include <osgEarth/LineSymbol>
 #include <osgEarth/Map>
 #include <osgEarth/MapNode>
@@ -242,10 +243,23 @@ void SceneController::mouseScroll(bool scrollUp) {
 
 PickResult SceneController::pickAt(int x, int y) const {
     PickResult result;
-    result.hit = false;
-    result.longitude = static_cast<double>(x);
-    result.latitude = static_cast<double>(y);
-    result.displayText = "Pick stub";
+    if (!impl_->viewer || !impl_->mapNode) {
+        return result;
+    }
+
+    osgEarth::GeoPoint point;
+    if (!impl_->mapNode->getGeoPointUnderMouse(impl_->viewer.get(), static_cast<float>(x), static_cast<float>(y), point)) {
+        return result;
+    }
+
+    if (!point.makeGeographic()) {
+        return result;
+    }
+
+    result.hit = true;
+    result.longitude = point.x();
+    result.latitude = point.y();
+    result.elevation = point.z();
     return result;
 }
 

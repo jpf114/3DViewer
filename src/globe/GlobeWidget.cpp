@@ -1,11 +1,13 @@
 #include "globe/GlobeWidget.h"
 
 #include <algorithm>
+#include <QString>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
 #include <QWheelEvent>
 
+#include "globe/PickResult.h"
 #include "tools/ToolManager.h"
 
 GlobeWidget::GlobeWidget(QWidget *parent)
@@ -32,6 +34,17 @@ ToolManager &GlobeWidget::toolManager() {
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
     sceneController_.mouseMove(static_cast<float>(event->position().x()), flipY(static_cast<float>(event->position().y())));
+    const PickResult pick = sceneController_.pickAt(
+        static_cast<int>(event->position().x()),
+        static_cast<int>(flipY(static_cast<float>(event->position().y()))));
+    if (pick.hit) {
+        emit cursorTextChanged(QString("Lon: %1, Lat: %2, Elev: %3")
+                                   .arg(pick.longitude, 0, 'f', 6)
+                                   .arg(pick.latitude, 0, 'f', 6)
+                                   .arg(pick.elevation, 0, 'f', 2));
+    } else {
+        emit cursorTextChanged("Lon: -, Lat: -, Elev: -");
+    }
     toolManager().mouseMoveEvent(*this, event);
     QWidget::mouseMoveEvent(event);
 }

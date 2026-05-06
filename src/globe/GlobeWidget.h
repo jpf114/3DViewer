@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QString>
 #include <QWidget>
 
 #include "globe/SceneController.h"
@@ -15,6 +16,9 @@ public:
 
     SceneController &sceneController();
     ToolManager &toolManager();
+
+signals:
+    void cursorTextChanged(const QString &text);
 
 protected:
     void mouseMoveEvent(QMouseEvent *event) override;

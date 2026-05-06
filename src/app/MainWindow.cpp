@@ -32,6 +32,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     connect(layerDock_, &LayerTreeDock::layerVisibilityChanged, this, &MainWindow::layerVisibilityChanged);
+    connect(globeWidget_, &GlobeWidget::cursorTextChanged, statusController_, &StatusBarController::setCursorText);
 }
 
 GlobeWidget *MainWindow::globeWidget() const {
