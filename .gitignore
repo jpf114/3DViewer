@@ -1,0 +1,6 @@
+build/
+install/
+.vs/
+*.user
+*.suo
+*.VC.db

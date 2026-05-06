@@ -1,0 +1,20 @@
+#pragma once
+
+#include <QDockWidget>
+
+class QTreeWidget;
+
+class LayerTreeDock : public QDockWidget {
+    Q_OBJECT
+
+public:
+    explicit LayerTreeDock(QWidget *parent = nullptr);
+    void addLayer(const std::string &id, const std::string &name, bool visible);
+    QTreeWidget *tree() const;
+
+signals:
+    void layerVisibilityChanged(const QString &layerId, bool visible);
+
+private:
+    QTreeWidget *tree_;
+};
