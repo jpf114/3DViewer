@@ -31,8 +31,10 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
+    connect(layerDock_, &LayerTreeDock::layerSelected, this, &MainWindow::layerSelected);
     connect(layerDock_, &LayerTreeDock::layerVisibilityChanged, this, &MainWindow::layerVisibilityChanged);
     connect(globeWidget_, &GlobeWidget::cursorTextChanged, statusController_, &StatusBarController::setCursorText);
+    propertyDock_->showText("No layer selected.");
 }
 
 GlobeWidget *MainWindow::globeWidget() const {
@@ -41,4 +43,8 @@ GlobeWidget *MainWindow::globeWidget() const {
 
 void MainWindow::addLayerRow(const Layer &layer) {
     layerDock_->addLayer(layer.id(), layer.name(), layer.visible());
+}
+
+void MainWindow::showLayerDetails(const QString &text) {
+    propertyDock_->showText(text);
 }

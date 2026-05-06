@@ -15,6 +15,7 @@ public:
                           DataImporter &importer);
 
     void importFile(const std::string &path);
+    void showLayerDetails(const std::string &layerId);
     void setLayerVisibility(const std::string &layerId, bool visible);
 
 private:

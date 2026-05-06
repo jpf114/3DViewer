@@ -13,6 +13,7 @@ public:
     QTreeWidget *tree() const;
 
 signals:
+    void layerSelected(const QString &layerId);
     void layerVisibilityChanged(const QString &layerId, bool visible);
 
 private:

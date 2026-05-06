@@ -12,6 +12,12 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem *item, int) {
         emit layerVisibilityChanged(item->data(0, Qt::UserRole).toString(), item->checkState(0) == Qt::Checked);
     });
+    connect(tree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *current, QTreeWidgetItem *) {
+        if (current == nullptr) {
+            return;
+        }
+        emit layerSelected(current->data(0, Qt::UserRole).toString());
+    });
 }
 
 void LayerTreeDock::addLayer(const std::string &id, const std::string &name, bool visible) {

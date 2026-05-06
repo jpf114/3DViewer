@@ -15,9 +15,11 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     GlobeWidget *globeWidget() const;
     void addLayerRow(const Layer &layer);
+    void showLayerDetails(const QString &text);
 
 signals:
     void importDataRequested(const QString &path);
+    void layerSelected(const QString &layerId);
     void layerVisibilityChanged(const QString &layerId, bool visible);
 
 private:
