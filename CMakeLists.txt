@@ -49,7 +49,26 @@ target_link_libraries(ThreeDViewer
         spdlog::spdlog
 )
 
+get_target_property(QT6_CORE_DLL_RELEASE Qt6::Core IMPORTED_LOCATION_RELEASE)
+get_target_property(QT6_CORE_DLL_DEBUG Qt6::Core IMPORTED_LOCATION_DEBUG)
+
+get_filename_component(QT6_BIN_DIR_RELEASE "${QT6_CORE_DLL_RELEASE}" DIRECTORY)
+get_filename_component(QT6_BIN_DIR_DEBUG "${QT6_CORE_DLL_DEBUG}" DIRECTORY)
+
+set(QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE "${QT6_BIN_DIR_RELEASE}/../Qt6/plugins/platforms/qwindows.dll")
+set(QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG "${QT6_BIN_DIR_DEBUG}/../Qt6/plugins/platforms/qwindowsd.dll")
+
+add_custom_command(TARGET ThreeDViewer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ThreeDViewer>/platforms"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<$<CONFIG:Debug>:${QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE}>"
+        "$<TARGET_FILE_DIR:ThreeDViewer>/platforms/"
+    VERBATIM
+)
+
 enable_testing()
 add_subdirectory(tests)
 
 install(TARGETS ThreeDViewer RUNTIME DESTINATION .)
+install(FILES "${QT6_WINDOWS_PLATFORM_PLUGIN_RELEASE}" CONFIGURATIONS Release DESTINATION platforms)
+install(FILES "${QT6_WINDOWS_PLATFORM_PLUGIN_DEBUG}" CONFIGURATIONS Debug DESTINATION platforms)

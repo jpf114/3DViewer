@@ -1,13 +1,13 @@
 #pragma once
 
-#include <QOpenGLWidget>
+#include <QWidget>
 
 #include "globe/SceneController.h"
 
 class ToolManager;
 class QTimer;
 
-class GlobeWidget : public QOpenGLWidget {
+class GlobeWidget : public QWidget {
     Q_OBJECT
 
 public:
@@ -17,12 +17,11 @@ public:
     ToolManager &toolManager();
 
 protected:
-    void initializeGL() override;
-    void paintGL() override;
-    void resizeGL(int width, int height) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:

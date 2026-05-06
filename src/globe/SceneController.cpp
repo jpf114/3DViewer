@@ -1,6 +1,7 @@
 #include "globe/SceneController.h"
 
 #include <osg/Camera>
+#include <osg/GraphicsContext>
 #include <osg/Viewport>
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
@@ -24,6 +25,7 @@
 #include <osgGA/EventQueue>
 #include <osgViewer/GraphicsWindow>
 #include <osgViewer/Viewer>
+#include <osgViewer/api/Win32/GraphicsWindowWin32>
 
 #include "globe/PickResult.h"
 #include "layers/Layer.h"
@@ -35,7 +37,7 @@ struct SceneController::Impl {
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
     osg::ref_ptr<osgViewer::Viewer> viewer;
-    osg::ref_ptr<osgViewer::GraphicsWindowEmbedded> graphicsWindow;
+    osg::ref_ptr<osgViewer::GraphicsWindow> graphicsWindow;
     osg::ref_ptr<osgEarth::ImageLayer> baseLayer;
 };
 
@@ -102,7 +104,7 @@ void syncVisibleState(osgEarth::Layer *sceneLayer, const Layer &layer) {
     visibleLayer->setOpacity(static_cast<float>(layer.opacity()));
 }
 
-void updateViewport(osgViewer::Viewer &viewer, osgViewer::GraphicsWindowEmbedded &graphicsWindow, int width, int height) {
+void updateViewport(osgViewer::Viewer &viewer, osgViewer::GraphicsWindow &graphicsWindow, int width, int height) {
     graphicsWindow.getEventQueue()->windowResize(0, 0, width, height);
     graphicsWindow.resized(0, 0, width, height);
     viewer.getCamera()->setViewport(new osg::Viewport(0, 0, width, height));
@@ -133,6 +135,42 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     syncVisibleState(sceneLayer.get(), *layer);
     impl_->map->addLayer(sceneLayer.get());
     impl_->renderLayers[layer->id()] = sceneLayer;
+}
+
+void SceneController::attachToNativeWindow(void *windowHandle, int width, int height) {
+    if (!impl_->viewer || windowHandle == nullptr) {
+        return;
+    }
+
+    if (!impl_->graphicsWindow) {
+        auto traits = osg::ref_ptr<osg::GraphicsContext::Traits>(new osg::GraphicsContext::Traits());
+        traits->x = 0;
+        traits->y = 0;
+        traits->width = width;
+        traits->height = height;
+        traits->windowDecoration = false;
+        traits->doubleBuffer = true;
+        traits->sharedContext = nullptr;
+        traits->inheritedWindowData =
+            new osgViewer::GraphicsWindowWin32::WindowData(static_cast<HWND>(windowHandle), false);
+
+        auto graphicsWindow = osg::ref_ptr<osgViewer::GraphicsWindowWin32>(new osgViewer::GraphicsWindowWin32(traits.get()));
+        if (!graphicsWindow->valid()) {
+            return;
+        }
+
+        impl_->graphicsWindow = graphicsWindow.get();
+        impl_->viewer->getCamera()->setGraphicsContext(graphicsWindow.get());
+        impl_->viewer->getCamera()->setViewport(new osg::Viewport(0, 0, width, height));
+        impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
+            30.0,
+            height > 0 ? static_cast<double>(width) / static_cast<double>(height) : 1.0,
+            1.0,
+            100000000.0);
+        impl_->viewer->realize();
+    }
+
+    resize(width, height);
 }
 
 void SceneController::frame() {
@@ -250,7 +288,6 @@ void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
 
 void SceneController::initializeDefaultScene(int width, int height) {
     if (impl_->initialized) {
-        resize(width, height);
         return;
     }
 
@@ -263,14 +300,6 @@ void SceneController::initializeDefaultScene(int width, int height) {
     impl_->viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
     impl_->viewer->setCameraManipulator(new osgEarth::EarthManipulator());
     impl_->viewer->setSceneData(impl_->mapNode.get());
-
-    impl_->graphicsWindow = impl_->viewer->setUpViewerAsEmbeddedInWindow(0, 0, width, height);
-    updateViewport(*impl_->viewer, *impl_->graphicsWindow, width, height);
-    impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
-        30.0,
-        height > 0 ? static_cast<double>(width) / static_cast<double>(height) : 1.0,
-        1.0,
-        100000000.0);
 
     impl_->initialized = true;
 }

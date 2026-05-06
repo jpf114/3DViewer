@@ -19,6 +19,7 @@ public:
     SceneController &operator=(SceneController &&) noexcept;
 
     void addLayer(const std::shared_ptr<Layer> &layer);
+    void attachToNativeWindow(void *windowHandle, int width, int height);
     void frame();
     bool hasBaseLayer() const;
     bool hasMapNode() const;
