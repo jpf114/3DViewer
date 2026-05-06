@@ -2,11 +2,22 @@
 
 #include <osg/Camera>
 #include <osg/Viewport>
+#include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
+#include <osgEarth/FeatureModelLayer>
+#include <osgEarth/Fill>
 #include <osgEarth/GDAL>
+#include <osgEarth/LineSymbol>
 #include <osgEarth/Map>
 #include <osgEarth/MapNode>
+#include <osgEarth/OGRFeatureSource>
+#include <osgEarth/PointSymbol>
+#include <osgEarth/PolygonSymbol>
 #include <osgEarth/Profile>
+#include <osgEarth/RenderSymbol>
+#include <osgEarth/Stroke>
+#include <osgEarth/Style>
+#include <osgEarth/StyleSheet>
 #include <osgEarth/URI>
 #include <osgEarth/VisibleLayer>
 #include <osgEarth/XYZ>
@@ -52,7 +63,27 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         elevationLayer->setURL(osgEarth::URI(layer.sourceUri()));
         return elevationLayer;
     }
-    case LayerKind::Vector:
+    case LayerKind::Vector: {
+        auto featureSource = osg::ref_ptr<osgEarth::OGRFeatureSource>(new osgEarth::OGRFeatureSource());
+        featureSource->setName(layer.name() + " Source");
+        featureSource->setURL(osgEarth::URI(layer.sourceUri()));
+
+        osgEarth::Style style("default");
+        style.getOrCreate<osgEarth::PointSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(1.0f, 0.65f, 0.2f, 1.0f));
+        style.getOrCreate<osgEarth::PointSymbol>()->size() = 6.0f;
+        style.getOrCreate<osgEarth::LineSymbol>()->stroke() = osgEarth::Stroke(osgEarth::Color(0.15f, 0.85f, 1.0f, 1.0f));
+        style.getOrCreate<osgEarth::PolygonSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(0.15f, 0.55f, 0.95f, 0.35f));
+        style.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+
+        auto styleSheet = osg::ref_ptr<osgEarth::StyleSheet>(new osgEarth::StyleSheet());
+        styleSheet->addStyle(style);
+
+        auto featureLayer = osg::ref_ptr<osgEarth::FeatureModelLayer>(new osgEarth::FeatureModelLayer());
+        featureLayer->setName(layer.name());
+        featureLayer->setFeatureSource(featureSource.get());
+        featureLayer->setStyleSheet(styleSheet.get());
+        return featureLayer;
+    }
     case LayerKind::Chart:
     case LayerKind::Scientific:
         return nullptr;

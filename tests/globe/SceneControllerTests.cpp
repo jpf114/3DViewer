@@ -4,6 +4,7 @@
 #include "globe/SceneController.h"
 #include "layers/ElevationLayer.h"
 #include "layers/ImageryLayer.h"
+#include "layers/VectorLayer.h"
 
 int main() {
     SceneController controller;
@@ -31,11 +32,13 @@ int main() {
 
     const auto imageryLayer = std::make_shared<ImageryLayer>("imagery-1", "Imagery 1", "missing-imagery.tif");
     const auto elevationLayer = std::make_shared<ElevationLayer>("elevation-1", "Elevation 1", "missing-dem.tif");
+    const auto vectorLayer = std::make_shared<VectorLayer>("vector-1", "Vector 1", "missing-vector.shp");
     controller.addLayer(imageryLayer);
     controller.addLayer(elevationLayer);
+    controller.addLayer(vectorLayer);
 
-    if (controller.renderedLayerCount() != 2) {
-        std::cerr << "Expected scene controller to create two render layers.\n";
+    if (controller.renderedLayerCount() != 3) {
+        std::cerr << "Expected scene controller to create three render layers.\n";
         return EXIT_FAILURE;
     }
 
