@@ -28,7 +28,7 @@ if(NOT CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Svg)
 find_package(OpenSceneGraph REQUIRED COMPONENTS osg osgDB osgGA osgUtil osgViewer)
 find_package(osgEarth CONFIG REQUIRED)
 find_package(GDAL CONFIG REQUIRED)
@@ -54,6 +54,7 @@ add_executable(ThreeDViewer
     src/layers/LayerManager.cpp
     src/tools/PickTool.cpp
     src/tools/ToolManager.cpp
+    src/ui/IconManager.cpp
     src/ui/LayerTreeDock.cpp
     src/ui/PropertyDock.cpp
     src/ui/StatusBarController.cpp
@@ -77,6 +78,7 @@ target_link_libraries(ThreeDViewer
         Qt6::Widgets
         Qt6::OpenGL
         Qt6::OpenGLWidgets
+        Qt6::Svg
         osgEarth::osgEarth
         GDAL::GDAL
         PROJ::proj
@@ -92,6 +94,24 @@ if(WIN32)
             "${CMAKE_CURRENT_SOURCE_DIR}/packaging/fonts.conf"
             "$<TARGET_FILE_DIR:ThreeDViewer>/fonts.conf"
         COMMENT "Minimal fontconfig (FONTCONFIG_FILE) for Windows")
+
+    add_custom_command(TARGET ThreeDViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/data"
+            "$<TARGET_FILE_DIR:ThreeDViewer>/data"
+        COMMENT "Copying data files")
+
+    add_custom_command(TARGET ThreeDViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
+            "$<TARGET_FILE_DIR:ThreeDViewer>/icons"
+        COMMENT "Copying icon resources")
+
+    add_custom_command(TARGET ThreeDViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/style.qss"
+            "$<TARGET_FILE_DIR:ThreeDViewer>/style.qss"
+        COMMENT "Copying QSS stylesheet")
 endif()
 
 enable_testing()
@@ -102,6 +122,24 @@ if(WIN32)
     threeviewer_install_runtime_data_release()
     threeviewer_install_runtime_dlls(ThreeDViewer)
     threeviewer_install_windows_packaging_extras()
+
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/"
+        DESTINATION data
+        CONFIGURATIONS Release
+        FILES_MATCHING PATTERN "*.tif" PATTERN "*.prj" PATTERN "*.tfw"
+                       PATTERN "*.shp" PATTERN "*.shx" PATTERN "*.dbf"
+                       PATTERN "*.prj" PATTERN "*.cpg" PATTERN "*.geojson"
+    )
+
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/"
+        DESTINATION icons
+        CONFIGURATIONS Release
+    )
+
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/style.qss"
+        DESTINATION .
+        CONFIGURATIONS Release
+    )
 else()
     install(TARGETS ThreeDViewer RUNTIME DESTINATION bin)
 endif()

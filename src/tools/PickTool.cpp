@@ -12,7 +12,7 @@ void PickTool::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
     }
 
     const float fx = static_cast<float>(event->position().x());
-    const float fy = widget.height() - static_cast<float>(event->position().y());
+    const float fy = static_cast<float>(event->position().y());
     const PickResult pick = widget.sceneController().pickAt(static_cast<int>(fx), static_cast<int>(fy));
     emit widget.terrainPickCompleted(pick);
 }

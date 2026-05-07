@@ -2,6 +2,7 @@
 
 #include <osg/Camera>
 #include <osg/GraphicsContext>
+#include <osg/Image>
 #include <osg/Viewport>
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
@@ -25,9 +26,10 @@
 #include <osgEarth/TextSymbol>
 #include <osgEarth/URI>
 #include <osgEarth/VisibleLayer>
-#include <osgEarth/XYZ>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <numbers>
 #include <spdlog/spdlog.h>
 
@@ -40,10 +42,10 @@
 #include "layers/Layer.h"
 
 #include <osgEarth/FeatureSourceIndexNode>
+#include <osgEarth/Registry>
 
 struct SceneController::Impl {
     bool initialized = false;
-    std::unordered_map<std::string, bool> layerVisibility;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
@@ -55,11 +57,45 @@ struct SceneController::Impl {
 
 namespace {
 
-osg::ref_ptr<osgEarth::XYZImageLayer> createBaseLayer() {
-    auto layer = osg::ref_ptr<osgEarth::XYZImageLayer>(new osgEarth::XYZImageLayer());
-    layer->setName("OpenStreetMap");
-    layer->setURL(osgEarth::URI("https://tile.openstreetmap.org/{z}/{x}/{y}.png"));
-    layer->setProfile(osgEarth::Profile::create(osgEarth::Profile::SPHERICAL_MERCATOR));
+constexpr const char *kDefaultBaseMapFilename = "image/NE1_LR_LC_SR_W.tif";
+constexpr const char *kResourceDirEnvVar = "THREEDVIEWER_RESOURCE_DIR";
+constexpr const char *kDefaultResourceDir = "data";
+constexpr double kDefaultFovDegrees = 30.0;
+constexpr double kDefaultNearPlane = 1.0;
+constexpr double kDefaultFarPlane = 1.0e8;
+constexpr double kFlyToRangeMultiplier = 1.75;
+constexpr double kFlyToMinRange = 200.0;
+constexpr double kFlyToMaxRange = 4.0e7;
+constexpr double kMetersPerDegLat = 111320.0;
+
+std::string escapeXml(const std::string &input) {
+    std::string output;
+    output.reserve(input.size());
+    for (char c : input) {
+        switch (c) {
+        case '&':  output += "&amp;"; break;
+        case '<':  output += "&lt;"; break;
+        case '>':  output += "&gt;"; break;
+        case '"':  output += "&quot;"; break;
+        case '\'': output += "&apos;"; break;
+        default:   output += c; break;
+        }
+    }
+    return output;
+}
+
+osg::ref_ptr<osgEarth::ImageLayer> createBaseLayer() {
+    auto layer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
+    layer->setName("Natural Earth");
+
+    const char *envDir = std::getenv(kResourceDirEnvVar);
+    if (envDir && envDir[0] != '\0') {
+        std::string path = std::string(envDir) + "/" + kDefaultBaseMapFilename;
+        layer->setURL(osgEarth::URI(path));
+    } else {
+        layer->setURL(osgEarth::URI(std::string(kDefaultResourceDir) + "/" + kDefaultBaseMapFilename));
+    }
+
     return layer;
 }
 
@@ -86,11 +122,6 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         pointStyle.getOrCreate<osgEarth::PointSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(1.0f, 0.35f, 0.15f, 1.0f));
         pointStyle.getOrCreate<osgEarth::PointSymbol>()->size() = 7.0f;
         pointStyle.getOrCreate<osgEarth::PointSymbol>()->smooth() = true;
-        auto *pointText = pointStyle.getOrCreate<osgEarth::TextSymbol>();
-        pointText->fill() = osgEarth::Fill(osgEarth::Color::White);
-        pointText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
-        pointText->size() = osgEarth::Expression<float>("14");
-        pointText->content() = osgEarth::StringExpression("[name]");
 
         osgEarth::Style lineStyle("line");
         osgEarth::Stroke lineStroke(osgEarth::Color(0.15f, 0.85f, 1.0f, 1.0f));
@@ -98,11 +129,6 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         lineStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = lineStroke;
         lineStyle.getOrCreate<osgEarth::LineSymbol>()->tessellation() = 20;
         lineStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
-        auto *lineText = lineStyle.getOrCreate<osgEarth::TextSymbol>();
-        lineText->fill() = osgEarth::Fill(osgEarth::Color::White);
-        lineText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
-        lineText->size() = osgEarth::Expression<float>("14");
-        lineText->content() = osgEarth::StringExpression("[name]");
 
         osgEarth::Style polygonStyle("polygon");
         polygonStyle.getOrCreate<osgEarth::PolygonSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(0.15f, 0.55f, 0.95f, 0.45f));
@@ -110,11 +136,6 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         polyStroke.width() = osgEarth::Expression<osgEarth::Distance>("1.5px");
         polygonStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = polyStroke;
         polygonStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
-        auto *polyText = polygonStyle.getOrCreate<osgEarth::TextSymbol>();
-        polyText->fill() = osgEarth::Fill(osgEarth::Color::White);
-        polyText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
-        polyText->size() = osgEarth::Expression<float>("14");
-        polyText->content() = osgEarth::StringExpression("[name]");
 
         auto styleSheet = osg::ref_ptr<osgEarth::StyleSheet>(new osgEarth::StyleSheet());
         styleSheet->addStyle(pointStyle);
@@ -125,6 +146,17 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         featureLayer->setName(layer.name());
         featureLayer->setFeatureSource(featureSource.get());
         featureLayer->setStyleSheet(styleSheet.get());
+
+        try {
+            featureSource->open();
+        } catch (const std::exception &ex) {
+            spdlog::error("SceneController: failed to open feature source '{}': {}", layer.sourceUri(), ex.what());
+            return nullptr;
+        } catch (...) {
+            spdlog::error("SceneController: failed to open feature source '{}': unknown error", layer.sourceUri());
+            return nullptr;
+        }
+
         return featureLayer;
     }
     case LayerKind::Chart:
@@ -162,8 +194,6 @@ SceneController::SceneController(SceneController &&) noexcept = default;
 SceneController &SceneController::operator=(SceneController &&) noexcept = default;
 
 void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
-    impl_->layerVisibility[layer->id()] = layer->visible();
-
     if (impl_->renderLayers.contains(layer->id())) {
         spdlog::warn("SceneController: layer '{}' already in scene, skipping", layer->id());
         return;
@@ -209,7 +239,7 @@ void SceneController::reorderUserLayers(const std::vector<std::shared_ptr<Layer>
 }
 
 void SceneController::attachToNativeWindow(void *windowHandle, int width, int height) {
-    if (!impl_->viewer || windowHandle == nullptr) {
+    if (!impl_->viewer || windowHandle == nullptr || width <= 0 || height <= 0) {
         return;
     }
 
@@ -234,10 +264,10 @@ void SceneController::attachToNativeWindow(void *windowHandle, int width, int he
         impl_->viewer->getCamera()->setGraphicsContext(graphicsWindow.get());
         impl_->viewer->getCamera()->setViewport(new osg::Viewport(0, 0, width, height));
         impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
-            30.0,
+            kDefaultFovDegrees,
             height > 0 ? static_cast<double>(width) / static_cast<double>(height) : 1.0,
-            1.0,
-            100000000.0);
+            kDefaultNearPlane,
+            kDefaultFarPlane);
         impl_->viewer->realize();
     }
 
@@ -336,6 +366,7 @@ PickResult SceneController::pickAt(int x, int y) const {
         if (visibleLayer && visibleLayer->getVisible()) {
             result.layerId = id;
             result.displayText = visibleLayer->getName();
+            break;
         }
     }
 
@@ -343,8 +374,6 @@ PickResult SceneController::pickAt(int x, int y) const {
 }
 
 void SceneController::removeLayer(const std::string &id) {
-    impl_->layerVisibility.erase(id);
-
     const auto it = impl_->renderLayers.find(id);
     if (it == impl_->renderLayers.end()) {
         return;
@@ -362,7 +391,7 @@ std::size_t SceneController::renderedLayerCount() const {
 }
 
 void SceneController::resize(int width, int height) {
-    if (!impl_->viewer || !impl_->graphicsWindow) {
+    if (!impl_->viewer || !impl_->graphicsWindow || width <= 0 || height <= 0) {
         return;
     }
 
@@ -370,8 +399,6 @@ void SceneController::resize(int width, int height) {
 }
 
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
-    impl_->layerVisibility[layer->id()] = layer->visible();
-
     const auto it = impl_->renderLayers.find(layer->id());
     if (it == impl_->renderLayers.end()) {
         return;
@@ -405,21 +432,27 @@ void SceneController::updateImageLayerBands(const std::shared_ptr<Layer> &layer)
     const int g = std::clamp(layer->greenBand(), 1, rm->bandCount);
     const int b = std::clamp(layer->blueBand(), 1, rm->bandCount);
 
+    const std::string dtR = (rm->bandCount >= r && !rm->bands[r - 1].dataType.empty()) ? rm->bands[r - 1].dataType : "Byte";
+    const std::string dtG = (rm->bandCount >= g && !rm->bands[g - 1].dataType.empty()) ? rm->bands[g - 1].dataType : "Byte";
+    const std::string dtB = (rm->bandCount >= b && !rm->bands[b - 1].dataType.empty()) ? rm->bands[b - 1].dataType : "Byte";
+
+    const std::string escapedUri = escapeXml(layer->sourceUri());
+
     const std::string vrtXml = std::string(
         "<VRTDataset rasterXSize=\"") + std::to_string(rm->rasterXSize) +
         "\" rasterYSize=\"" + std::to_string(rm->rasterYSize) + "\">"
-        "<VRTRasterBand dataType=\"Byte\" band=\"1\">"
-        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<VRTRasterBand dataType=\"" + dtR + "\" band=\"1\">"
+        "<SimpleSource><SourceFilename>" + escapedUri + "</SourceFilename>"
         "<SourceBand>" + std::to_string(r) + "</SourceBand>"
         "</SimpleSource>"
         "</VRTRasterBand>"
-        "<VRTRasterBand dataType=\"Byte\" band=\"2\">"
-        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<VRTRasterBand dataType=\"" + dtG + "\" band=\"2\">"
+        "<SimpleSource><SourceFilename>" + escapedUri + "</SourceFilename>"
         "<SourceBand>" + std::to_string(g) + "</SourceBand>"
         "</SimpleSource>"
         "</VRTRasterBand>"
-        "<VRTRasterBand dataType=\"Byte\" band=\"3\">"
-        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<VRTRasterBand dataType=\"" + dtB + "\" band=\"3\">"
+        "<SimpleSource><SourceFilename>" + escapedUri + "</SourceFilename>"
         "<SourceBand>" + std::to_string(b) + "</SourceBand>"
         "</SimpleSource>"
         "</VRTRasterBand>"
@@ -451,12 +484,11 @@ void SceneController::flyToGeographicBounds(const GeographicBounds &bounds, doub
     const double lat = 0.5 * (bounds.south + bounds.north);
     const double lon = 0.5 * (bounds.west + bounds.east);
     const double latRad = lat * std::numbers::pi / 180.0;
-    constexpr double kMetersPerDegLat = 111320.0;
     const double mPerDegLon = (std::max)(1e-6, kMetersPerDegLat * std::cos(latRad));
     const double widthM = (bounds.east - bounds.west) * mPerDegLon;
     const double heightM = (bounds.north - bounds.south) * kMetersPerDegLat;
     const double maxDim = (std::max)(widthM, heightM);
-    const double range = std::clamp(maxDim * 1.75, 200.0, 4.0e7);
+    const double range = std::clamp(maxDim * kFlyToRangeMultiplier, kFlyToMinRange, kFlyToMaxRange);
 
     osgEarth::Viewpoint vp("layer-extent", lon, lat, 0.0, 0.0, -90.0, range);
     em->setViewpoint(vp, durationSeconds);
@@ -478,6 +510,14 @@ void SceneController::initializeDefaultScene(int width, int height) {
     impl_->viewer->setCameraManipulator(new osgEarth::EarthManipulator());
     impl_->viewer->setSceneData(impl_->mapNode.get());
 
+    if (width > 0 && height > 0) {
+        impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
+            kDefaultFovDegrees,
+            static_cast<double>(width) / static_cast<double>(height),
+            kDefaultNearPlane,
+            kDefaultFarPlane);
+    }
+
     impl_->initialized = true;
     spdlog::info("SceneController: default scene initialized");
     flushPendingLayers();
@@ -489,4 +529,85 @@ void SceneController::flushPendingLayers() {
     for (const auto &layer : pending) {
         addLayer(layer);
     }
+}
+
+void SceneController::resetView() {
+    if (!impl_->viewer) {
+        return;
+    }
+
+    auto *em = dynamic_cast<osgEarth::EarthManipulator *>(impl_->viewer->getCameraManipulator());
+    if (!em) {
+        return;
+    }
+
+    constexpr double kDefaultRange = 3.0 * 6371000.0;
+    osgEarth::Viewpoint vp("home", 0.0, 0.0, 0.0, 0.0, -90.0, kDefaultRange);
+    em->setViewpoint(vp, 1.5);
+}
+
+QImage SceneController::captureImage() {
+    if (!impl_->viewer || !impl_->graphicsWindow) {
+        return QImage();
+    }
+
+    auto *camera = impl_->viewer->getCamera();
+    osg::ref_ptr<osg::Image> osgImage = new osg::Image;
+    camera->attach(osg::Camera::COLOR_BUFFER, osgImage.get());
+
+    impl_->viewer->frame();
+
+    camera->detach(osg::Camera::COLOR_BUFFER);
+
+    if (!osgImage->valid()) {
+        return QImage();
+    }
+
+    const int w = static_cast<int>(osgImage->s());
+    const int h = static_cast<int>(osgImage->t());
+    if (w <= 0 || h <= 0) {
+        return QImage();
+    }
+
+    const unsigned char *data = osgImage->data();
+    const GLint pixelFormat = osgImage->getPixelFormat();
+
+    if (pixelFormat == GL_RGB || pixelFormat == GL_BGR) {
+        QImage result(w, h, QImage::Format_RGB888);
+        for (int y = 0; y < h; ++y) {
+            const unsigned char *srcRow = data + y * osgImage->getRowSizeInBytes();
+            unsigned char *dstRow = result.scanLine(h - 1 - y);
+            if (pixelFormat == GL_RGB) {
+                std::memcpy(dstRow, srcRow, static_cast<std::size_t>(w * 3));
+            } else {
+                for (int x = 0; x < w; ++x) {
+                    dstRow[x * 3 + 0] = srcRow[x * 3 + 2];
+                    dstRow[x * 3 + 1] = srcRow[x * 3 + 1];
+                    dstRow[x * 3 + 2] = srcRow[x * 3 + 0];
+                }
+            }
+        }
+        return result;
+    }
+
+    if (pixelFormat == GL_RGBA || pixelFormat == GL_BGRA) {
+        QImage result(w, h, QImage::Format_RGBA8888);
+        for (int y = 0; y < h; ++y) {
+            const unsigned char *srcRow = data + y * osgImage->getRowSizeInBytes();
+            unsigned char *dstRow = result.scanLine(h - 1 - y);
+            if (pixelFormat == GL_RGBA) {
+                std::memcpy(dstRow, srcRow, static_cast<std::size_t>(w * 4));
+            } else {
+                for (int x = 0; x < w; ++x) {
+                    dstRow[x * 4 + 0] = srcRow[x * 4 + 2];
+                    dstRow[x * 4 + 1] = srcRow[x * 4 + 1];
+                    dstRow[x * 4 + 2] = srcRow[x * 4 + 0];
+                    dstRow[x * 4 + 3] = srcRow[x * 4 + 3];
+                }
+            }
+        }
+        return result;
+    }
+
+    return QImage();
 }

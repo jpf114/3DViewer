@@ -2,10 +2,15 @@
 
 #include <algorithm>
 #include <QString>
+#include <QStringLiteral>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
 #include <QWheelEvent>
+#include <QScreen>
+#include <QWindow>
+
+using namespace Qt::Literals::StringLiterals;
 
 #include "globe/PickResult.h"
 #include "tools/ToolManager.h"
@@ -17,6 +22,13 @@ unsigned int mapQtButton(Qt::MouseButton button) {
     if (button == Qt::MiddleButton) return 2;
     if (button == Qt::RightButton) return 3;
     return 0;
+}
+
+qreal getDevicePixelRatio(const QWidget *widget) {
+    if (widget && widget->windowHandle()) {
+        return widget->windowHandle()->devicePixelRatio();
+    }
+    return widget ? widget->devicePixelRatioF() : 1.0;
 }
 
 }
@@ -50,8 +62,9 @@ ToolManager &GlobeWidget::toolManager() {
 }
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
-    const float fx = static_cast<float>(event->position().x());
-    const float fy = flipY(static_cast<float>(event->position().y()));
+    const qreal dpr = getDevicePixelRatio(this);
+    const float fx = static_cast<float>(event->position().x() * dpr);
+    const float fy = static_cast<float>(event->position().y() * dpr);
     sceneController_.mouseMove(fx, fy);
 
     lastPickX_ = static_cast<int>(fx);
@@ -65,11 +78,12 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void GlobeWidget::mousePressEvent(QMouseEvent *event) {
+    const qreal dpr = getDevicePixelRatio(this);
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
         sceneController_.mousePress(
-            static_cast<float>(event->position().x()),
-            flipY(static_cast<float>(event->position().y())),
+            static_cast<float>(event->position().x() * dpr),
+            static_cast<float>(event->position().y() * dpr),
             button);
     }
     toolManager().mousePressEvent(*this, event);
@@ -77,11 +91,12 @@ void GlobeWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
+    const qreal dpr = getDevicePixelRatio(this);
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
         sceneController_.mouseRelease(
-            static_cast<float>(event->position().x()),
-            flipY(static_cast<float>(event->position().y())),
+            static_cast<float>(event->position().x() * dpr),
+            static_cast<float>(event->position().y() * dpr),
             button);
     }
     toolManager().mouseReleaseEvent(*this, event);
@@ -94,37 +109,37 @@ void GlobeWidget::wheelEvent(QWheelEvent *event) {
 }
 
 void GlobeWidget::resizeEvent(QResizeEvent *event) {
-    sceneController_.resize(event->size().width(), event->size().height());
+    const qreal dpr = getDevicePixelRatio(this);
+    const int pw = static_cast<int>(event->size().width() * dpr);
+    const int ph = static_cast<int>(event->size().height() * dpr);
+    sceneController_.resize((std::max)(1, pw), (std::max)(1, ph));
     QWidget::resizeEvent(event);
 }
 
 void GlobeWidget::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
 
-    const int sceneWidth = (std::max)(1, width());
-    const int sceneHeight = (std::max)(1, height());
+    const qreal dpr = getDevicePixelRatio(this);
+    const int pw = static_cast<int>((std::max)(1, width()) * dpr);
+    const int ph = static_cast<int>((std::max)(1, height()) * dpr);
     if (!sceneController_.isInitialized()) {
-        sceneController_.initializeDefaultScene(sceneWidth, sceneHeight);
+        sceneController_.initializeDefaultScene(pw, ph);
     }
 
-    sceneController_.attachToNativeWindow(reinterpret_cast<void *>(winId()), sceneWidth, sceneHeight);
+    sceneController_.attachToNativeWindow(reinterpret_cast<void *>(winId()), pw, ph);
     if (!frameTimer_->isActive()) {
         frameTimer_->start();
     }
 }
 
-float GlobeWidget::flipY(float y) const {
-    return static_cast<float>(height()) - y;
-}
-
 void GlobeWidget::performPick(int x, int y) {
     const PickResult pick = sceneController_.pickAt(x, y);
     if (pick.hit) {
-        emit cursorTextChanged(QString("Lon: %1, Lat: %2, Elev: %3")
+        emit cursorTextChanged(QString(u"经度：%1，纬度：%2，高程：%3"_s)
                                    .arg(pick.longitude, 0, 'f', 6)
                                    .arg(pick.latitude, 0, 'f', 6)
                                    .arg(pick.elevation, 0, 'f', 2));
     } else {
-        emit cursorTextChanged("Lon: -, Lat: -, Elev: -");
+        emit cursorTextChanged(u"经度：-，纬度：-，高程：-"_s);
     }
 }

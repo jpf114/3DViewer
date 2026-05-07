@@ -31,7 +31,6 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    float flipY(float y) const;
     void performPick(int x, int y);
 
     SceneController sceneController_;

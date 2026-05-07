@@ -23,10 +23,14 @@ public:
     void setLayerOpacity(const std::string &layerId, double opacity);
     void setBandMapping(const std::string &layerId, int red, int green, int blue);
     void removeLayer(const std::string &layerId);
+    void zoomToLayer(const std::string &layerId);
+    void resetView();
+    void captureScreenshot();
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
     void handleTerrainPick(const PickResult &pick);
+    void addToRecentFiles(const QString &path);
 
     MainWindow &window_;
     SceneController &sceneController_;

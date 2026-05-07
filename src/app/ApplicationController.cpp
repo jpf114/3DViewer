@@ -1,12 +1,20 @@
 #include "app/ApplicationController.h"
 
+#include <QFileDialog>
+#include <QImage>
 #include <QMessageBox>
 #include <QObject>
+#include <QSettings>
 #include <QStatusBar>
 #include <QString>
+#include <QStringLiteral>
 #include <QStringList>
+#include <QDir>
+#include <QFileInfo>
 #include <spdlog/spdlog.h>
 #include <vector>
+
+using namespace Qt::Literals::StringLiterals;
 
 #include "app/MainWindow.h"
 #include "globe/GlobeWidget.h"
@@ -18,21 +26,28 @@
 
 namespace {
 
+constexpr int kMaxRecentFiles = 5;
+constexpr const char *kRecentFilesKey = "recentFiles";
+
 QString layerKindToText(LayerKind kind) {
     switch (kind) {
     case LayerKind::Imagery:
-        return "Imagery";
+        return u"影像"_s;
     case LayerKind::Elevation:
-        return "Elevation";
+        return u"高程"_s;
     case LayerKind::Vector:
-        return "Vector";
+        return u"矢量"_s;
     case LayerKind::Chart:
-        return "Chart";
+        return u"海图"_s;
     case LayerKind::Scientific:
-        return "Scientific";
+        return u"科学数据"_s;
     }
 
-    return "Unknown";
+    return u"未知"_s;
+}
+
+QString utf8(const std::string &s) {
+    return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
 }
@@ -46,7 +61,7 @@ ApplicationController::ApplicationController(MainWindow &window,
       layerManager_(layerManager),
       importer_(importer) {
     QObject::connect(&window_, &MainWindow::importDataRequested, [this](const QString &path) {
-        importFile(path.toStdString());
+        importFile(path.toUtf8().toStdString());
     });
 
     QObject::connect(&window_, &MainWindow::layerSelected, [this](const QString &layerId) {
@@ -77,110 +92,99 @@ ApplicationController::ApplicationController(MainWindow &window,
         window_.globeWidget()->toolManager().setActiveTool(static_cast<ToolId>(toolId));
     });
 
+    QObject::connect(&window_, &MainWindow::resetViewRequested, [this]() {
+        resetView();
+    });
+
+    QObject::connect(&window_, &MainWindow::zoomToLayerRequested, [this](const QString &layerId) {
+        zoomToLayer(layerId.toStdString());
+    });
+
+    QObject::connect(&window_, &MainWindow::screenshotRequested, [this]() {
+        captureScreenshot();
+    });
+
     QObject::connect(window_.globeWidget(), &GlobeWidget::terrainPickCompleted, [this](const PickResult &pick) {
         handleTerrainPick(pick);
     });
 }
 
 void ApplicationController::importFile(const std::string &path) {
-    spdlog::info("ApplicationController: importing '{}'", path);
-    window_.statusBar()->showMessage(QString("Importing %1...").arg(QString::fromStdString(path)));
+    std::vector<std::string> pathsToImport;
+    const QString qPath = utf8(path);
+    const QDir dir(qPath);
 
-    const auto layer = importer_.import(path);
-    if (!layer) {
-        spdlog::warn("ApplicationController: import failed for '{}'", path);
-        window_.statusBar()->showMessage("Import failed.", 3000);
-        QMessageBox::warning(&window_, "Import Failed",
-                             QString("Unsupported or unreadable data source:\n%1\n\n"
-                                     "Supported formats include GeoTIFF (.tif), IMG (.img), Shapefile (.shp),\n"
-                                     "GeoJSON (.geojson), GeoPackage (.gpkg), KML (.kml), and more.")
-                                 .arg(QString::fromStdString(path)));
-        return;
+    if (dir.exists()) {
+        const QStringList shpFilters = QStringList() << "*.shp" << "*.SHP";
+        const QFileInfoList shpEntries = dir.entryInfoList(shpFilters, QDir::Files);
+        if (shpEntries.isEmpty()) {
+            window_.statusBar()->showMessage(u"目录中未找到矢量数据文件。"_s, 3000);
+            QMessageBox::warning(&window_, u"导入失败"_s,
+                                 QString(u"目录中未找到 Shapefile (.shp) 文件：\n%1"_s)
+                                     .arg(qPath));
+            return;
+        }
+        for (const QFileInfo &fi : shpEntries) {
+            pathsToImport.push_back(fi.absoluteFilePath().toUtf8().toStdString());
+        }
+    } else {
+        pathsToImport.push_back(path);
     }
 
-    if (!layerManager_.addLayer(layer)) {
-        spdlog::warn("ApplicationController: duplicate layer for '{}'", path);
-        window_.statusBar()->showMessage("Layer already exists.", 3000);
-        QMessageBox::information(&window_, "Already Imported",
-                                 QString("This file has already been imported:\n%1").arg(QString::fromStdString(path)));
-        return;
-    }
+    for (const auto &importPath : pathsToImport) {
+        spdlog::info("ApplicationController: importing '{}'", importPath);
+        window_.statusBar()->showMessage(QString(u"正在导入 %1..."_s).arg(utf8(importPath)));
 
-    sceneController_.addLayer(layer);
-    window_.addLayerRow(*layer);
-    spdlog::info("ApplicationController: layer '{}' imported successfully", layer->id());
+        const auto layer = importer_.import(importPath);
+        if (!layer) {
+            spdlog::warn("ApplicationController: import failed for '{}'", importPath);
+            window_.statusBar()->showMessage(u"导入失败。"_s, 3000);
+            QMessageBox::warning(&window_, u"导入失败"_s,
+                                 QString(u"不支持或无法读取的数据源：\n%1\n\n支持的格式包括 GeoTIFF (.tif)、IMG (.img)、Shapefile (.shp)、\nGeoJSON (.geojson)、GeoPackage (.gpkg)、KML (.kml) 等。"_s)
+                                     .arg(utf8(importPath)));
+            return;
+        }
 
-    window_.statusBar()->showMessage(
-        QString("Imported: %1 (%2)").arg(QString::fromStdString(layer->name())).arg(layerKindToText(layer->kind())),
-        5000);
+        if (!layerManager_.addLayer(layer)) {
+            spdlog::warn("ApplicationController: duplicate layer for '{}'", importPath);
+            window_.statusBar()->showMessage(u"图层已存在。"_s, 3000);
+            QMessageBox::information(&window_, u"已导入"_s,
+                                     QString(u"该文件已经导入：\n%1"_s).arg(utf8(importPath)));
+            return;
+        }
 
-    if (const auto bounds = layer->geographicBounds(); bounds.has_value() && bounds->isValid()) {
-        sceneController_.flyToGeographicBounds(*bounds);
+        sceneController_.addLayer(layer);
+        window_.addLayerRow(*layer);
+        addToRecentFiles(utf8(importPath));
+        spdlog::info("ApplicationController: layer '{}' imported successfully", layer->id());
+
+        window_.statusBar()->showMessage(
+            QString(u"已导入：%1 (%2)"_s).arg(utf8(layer->name())).arg(layerKindToText(layer->kind())),
+            5000);
+
+        if (const auto bounds = layer->geographicBounds(); bounds.has_value() && bounds->isValid()) {
+            sceneController_.flyToGeographicBounds(*bounds);
+        }
     }
 }
 
 void ApplicationController::showLayerDetails(const std::string &layerId) {
     const auto layer = layerManager_.findById(layerId);
     if (!layer) {
-        window_.showLayerDetails("Layer not found.");
+        window_.showLayerDetails(u"未找到图层。"_s);
         window_.clearLayerProperties();
         return;
     }
 
-    QStringList lines;
-    lines.append(QString("Name: %1").arg(QString::fromStdString(layer->name())));
-    lines.append(QString("ID: %1").arg(QString::fromStdString(layer->id())));
-    lines.append(QString("Type: %1").arg(layerKindToText(layer->kind())));
-    lines.append(QString("Source: %1").arg(QString::fromStdString(layer->sourceUri())));
-    lines.append(QString("Visible: %1").arg(layer->visible() ? "Yes" : "No"));
-    lines.append(QString("Opacity: %1").arg(layer->opacity(), 0, 'f', 2));
-
-    if (const auto &rm = layer->rasterMetadata()) {
-        lines.append("");
-        lines.append("--- Raster Info ---");
-        lines.append(QString("Driver: %1").arg(QString::fromStdString(rm->driverName)));
-        lines.append(QString("Size: %1 x %2").arg(rm->rasterXSize).arg(rm->rasterYSize));
-        lines.append(QString("Bands: %1").arg(rm->bandCount));
-        if (!rm->epsgCode.empty()) {
-            lines.append(QString("CRS: %1").arg(QString::fromStdString(rm->epsgCode)));
-        }
-        if (rm->pixelSizeX > 0 || rm->pixelSizeY > 0) {
-            lines.append(QString("Pixel Size: %1 x %2").arg(rm->pixelSizeX, 0, 'f', 6).arg(rm->pixelSizeY, 0, 'f', 6));
-        }
-        for (const auto &band : rm->bands) {
-            lines.append(QString("  Band %1: %2 [%3] CI=%4")
-                             .arg(band.index)
-                             .arg(QString::fromStdString(band.dataType))
-                             .arg(band.description.empty() ? "-" : QString::fromStdString(band.description))
-                             .arg(QString::fromStdString(band.colorInterpretation)));
-            if (band.hasMinMax) {
-                lines.append(QString("    Range: [%1, %2]").arg(band.min, 0, 'f', 2).arg(band.max, 0, 'f', 2));
-            }
-            if (band.hasNoDataValue) {
-                lines.append(QString("    NoData: %1").arg(band.noDataValue, 0, 'f', 2));
-            }
-        }
-    }
-
-    if (const auto &vm = layer->vectorMetadata()) {
-        lines.append("");
-        lines.append("--- Vector Info ---");
-        lines.append(QString("Layer: %1").arg(QString::fromStdString(vm->name)));
-        lines.append(QString("Geometry: %1").arg(QString::fromStdString(vm->geometryType)));
-        lines.append(QString("Features: %1").arg(vm->featureCount));
-        if (!vm->epsgCode.empty()) {
-            lines.append(QString("CRS: %1").arg(QString::fromStdString(vm->epsgCode)));
-        }
-        if (!vm->fields.empty()) {
-            lines.append(QString("Fields (%1):").arg(vm->fields.size()));
-            for (const auto &field : vm->fields) {
-                lines.append(QString("  %1 (%2)").arg(QString::fromStdString(field.name)).arg(QString::fromStdString(field.typeName)));
-            }
-        }
-    }
-
-    window_.showLayerProperties(QString::fromStdString(layerId), lines.join('\n'), layer->opacity(),
-                                layer->rasterMetadata().has_value() ? layer->rasterMetadata()->bandCount : 0);
+    window_.showLayerProperties(
+        utf8(layerId),
+        utf8(layer->name()),
+        layerKindToText(layer->kind()),
+        utf8(layer->sourceUri()),
+        layer->visible(),
+        layer->opacity(),
+        layer->rasterMetadata(),
+        layer->vectorMetadata());
 }
 
 void ApplicationController::setLayerVisibility(const std::string &layerId, bool visible) {
@@ -208,23 +212,23 @@ void ApplicationController::applyLayerOrderFromUi(const QStringList &orderedIds)
 
 void ApplicationController::handleTerrainPick(const PickResult &pick) {
     if (!pick.hit) {
-        window_.showLayerDetails("Pick: no terrain hit under cursor.");
+        window_.showLayerDetails(u"拾取：光标下无地形。"_s);
         return;
     }
 
     QStringList lines;
-    lines.append(QString("Lon: %1").arg(pick.longitude, 0, 'f', 6));
-    lines.append(QString("Lat: %1").arg(pick.latitude, 0, 'f', 6));
-    lines.append(QString("Elev (approx): %1").arg(pick.elevation, 0, 'f', 2));
+    lines.append(QString(u"经度：%1"_s).arg(pick.longitude, 0, 'f', 6));
+    lines.append(QString(u"纬度：%1"_s).arg(pick.latitude, 0, 'f', 6));
+    lines.append(QString(u"高程(近似)：%1"_s).arg(pick.elevation, 0, 'f', 2));
     if (!pick.layerId.empty()) {
-        lines.append(QString("Layer: %1").arg(QString::fromStdString(pick.displayText)));
+        lines.append(QString(u"图层：%1"_s).arg(utf8(pick.displayText)));
     }
 
     if (!pick.featureAttributes.empty()) {
         lines.append("");
-        lines.append("--- Feature Attributes ---");
+        lines.append(u"--- 要素属性 ---"_s);
         for (const auto &attr : pick.featureAttributes) {
-            lines.append(QString("  %1: %2").arg(QString::fromStdString(attr.name)).arg(QString::fromStdString(attr.value)));
+            lines.append(QString(u"  %1：%2"_s).arg(utf8(attr.name)).arg(utf8(attr.value)));
         }
     }
 
@@ -236,7 +240,7 @@ void ApplicationController::removeLayer(const std::string &layerId) {
     sceneController_.removeLayer(layerId);
     layerManager_.removeLayer(layerId);
     window_.removeLayerRow(layerId);
-    window_.showLayerDetails("No layer selected.");
+    window_.showLayerDetails(u"未选择图层。"_s);
     window_.clearLayerProperties();
 }
 
@@ -259,4 +263,57 @@ void ApplicationController::setBandMapping(const std::string &layerId, int red, 
     layer->setBandMapping(red, green, blue);
     sceneController_.updateImageLayerBands(layer);
     spdlog::info("ApplicationController: band mapping changed for '{}' to R={} G={} B={}", layerId, red, green, blue);
+}
+
+void ApplicationController::zoomToLayer(const std::string &layerId) {
+    const auto layer = layerManager_.findById(layerId);
+    if (!layer) {
+        return;
+    }
+    const auto bounds = layer->geographicBounds();
+    if (bounds.has_value() && bounds->isValid()) {
+        sceneController_.flyToGeographicBounds(*bounds);
+    }
+}
+
+void ApplicationController::resetView() {
+    sceneController_.resetView();
+}
+
+void ApplicationController::captureScreenshot() {
+    const QImage image = sceneController_.captureImage();
+    if (image.isNull()) {
+        window_.statusBar()->showMessage(u"截图失败：无法捕获画面。"_s, 3000);
+        return;
+    }
+
+    const QString defaultPath = QDir::homePath() + u"/3DViewer_screenshot.png"_s;
+    const QString path = QFileDialog::getSaveFileName(
+        &window_, u"保存截图"_s, defaultPath,
+        u"PNG 图像 (*.png);;JPEG 图像 (*.jpg);;BMP 图像 (*.bmp)"_s);
+    if (path.isEmpty()) {
+        return;
+    }
+
+    if (image.save(path)) {
+        spdlog::info("ApplicationController: screenshot saved to '{}'", path.toStdString());
+        window_.statusBar()->showMessage(QString(u"截图已保存：%1"_s).arg(path), 5000);
+    } else {
+        spdlog::warn("ApplicationController: failed to save screenshot to '{}'", path.toStdString());
+        window_.statusBar()->showMessage(u"截图保存失败。"_s, 3000);
+    }
+}
+
+void ApplicationController::addToRecentFiles(const QString &path) {
+    QSettings settings;
+    QStringList recent = settings.value(kRecentFilesKey).toStringList();
+
+    recent.removeAll(path);
+    recent.prepend(path);
+    while (recent.size() > kMaxRecentFiles) {
+        recent.removeLast();
+    }
+
+    settings.setValue(kRecentFilesKey, recent);
+    window_.setRecentFiles(recent);
 }

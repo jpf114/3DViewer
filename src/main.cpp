@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QFile>
 #include <QString>
 
 #if defined(Q_OS_WIN)
@@ -14,6 +15,7 @@
 #include "globe/GlobeWidget.h"
 #include "globe/PickResult.h"
 #include "layers/LayerManager.h"
+#include "ui/IconManager.h"
 
 #if defined(Q_OS_WIN)
 static void setupWindowsRuntimeEnvironment() {
@@ -24,15 +26,45 @@ static void setupWindowsRuntimeEnvironment() {
         wchar_t module[MAX_PATH];
         const DWORD n = GetModuleFileNameW(nullptr, module, MAX_PATH);
         if (n > 0 && n < MAX_PATH) {
-            std::filesystem::path conf = std::filesystem::path(module).parent_path() / "fonts.conf";
+            std::filesystem::path exeDir = std::filesystem::path(module).parent_path();
+            std::filesystem::path conf = exeDir / "fonts.conf";
             if (std::filesystem::exists(conf)) {
                 const std::wstring native = conf.native();
                 qputenv("FONTCONFIG_FILE", QString::fromStdWString(native).toUtf8());
+            }
+            std::filesystem::path dataDir = exeDir / "data";
+            if (std::filesystem::exists(dataDir)) {
+                const std::wstring native = dataDir.native();
+                qputenv("THREEDVIEWER_RESOURCE_DIR", QString::fromStdWString(native).toUtf8());
+            }
+            std::filesystem::path iconsDir = exeDir / "icons";
+            if (std::filesystem::exists(iconsDir)) {
+                IconManager::instance().setIconsBasePath(
+                    QString::fromStdWString(iconsDir.native()));
             }
         }
     }
 }
 #endif
+
+static void loadStyleSheet(QApplication &app) {
+    QString qssPath;
+#if defined(Q_OS_WIN)
+    wchar_t module[MAX_PATH];
+    const DWORD n = GetModuleFileNameW(nullptr, module, MAX_PATH);
+    if (n > 0 && n < MAX_PATH) {
+        std::filesystem::path p = std::filesystem::path(module).parent_path() / "style.qss";
+        qssPath = QString::fromStdWString(p.native());
+    }
+#endif
+    if (qssPath.isEmpty()) {
+        qssPath = QStringLiteral("style.qss");
+    }
+    QFile qss(qssPath);
+    if (qss.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        app.setStyleSheet(QString::fromUtf8(qss.readAll()));
+    }
+}
 
 int main(int argc, char *argv[]) {
 #if defined(Q_OS_WIN)
@@ -41,6 +73,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     qRegisterMetaType<PickResult>("PickResult");
     logging::initialize();
+    loadStyleSheet(app);
 
     MainWindow window;
     LayerManager layerManager;

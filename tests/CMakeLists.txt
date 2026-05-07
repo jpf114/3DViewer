@@ -6,13 +6,14 @@ add_executable(ApplicationSmokeTests
     ../src/layers/Layer.cpp
     ../src/tools/PickTool.cpp
     ../src/tools/ToolManager.cpp
+    ../src/ui/IconManager.cpp
     ../src/ui/LayerTreeDock.cpp
     ../src/ui/PropertyDock.cpp
     ../src/ui/StatusBarController.cpp
 )
 
 target_include_directories(ApplicationSmokeTests PRIVATE ../src)
-target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets osgEarth::osgEarth spdlog::spdlog)
+target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg osgEarth::osgEarth spdlog::spdlog)
 
 add_test(NAME ApplicationSmokeTests COMMAND ApplicationSmokeTests)
 

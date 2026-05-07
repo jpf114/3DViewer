@@ -9,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include <gdal_priv.h>
+#include <cpl_conv.h>
 #include <ogr_spatialref.h>
 #include <ogrsf_frmts.h>
 
@@ -17,6 +18,7 @@ namespace {
 void ensureGdalRegistered() {
     static std::once_flag once;
     std::call_once(once, []() {
+        CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
         GDALAllRegister();
     });
 }
@@ -36,7 +38,7 @@ DataSourceKind classifyDataset(GDALDataset &dataset) {
         return DataSourceKind::Vector;
     }
 
-    if (dataset.GetRasterCount() == 1) {
+    if (dataset.GetRasterCount() >= 1) {
         if (GDALRasterBand *band = dataset.GetRasterBand(1)) {
             const auto interpretation = band->GetColorInterpretation();
             if (interpretation == GCI_GrayIndex || interpretation == GCI_Undefined) {
@@ -51,8 +53,11 @@ DataSourceKind classifyDataset(GDALDataset &dataset) {
                     return DataSourceKind::RasterElevation;
                 }
                 double adfMinMax[2] = {0.0, 0.0};
-                band->ComputeRasterMinMax(true, adfMinMax);
+                band->ComputeRasterMinMax(false, adfMinMax);
                 if (adfMinMax[0] < -500.0 || adfMinMax[1] > 9000.0) {
+                    return DataSourceKind::RasterElevation;
+                }
+                if (dataset.GetRasterCount() == 1) {
                     return DataSourceKind::RasterElevation;
                 }
                 return DataSourceKind::RasterImagery;
@@ -260,7 +265,7 @@ RasterMetadata collectRasterMetadata(GDALDataset &ds) {
         bi.noDataValue = band->GetNoDataValue(&hasNodata);
         bi.hasNoDataValue = hasNodata != 0;
         double adfMinMax[2] = {0.0, 0.0};
-        if (band->ComputeRasterMinMax(true, adfMinMax) == CE_None) {
+        if (band->ComputeRasterMinMax(false, adfMinMax) == CE_None) {
             bi.min = adfMinMax[0];
             bi.max = adfMinMax[1];
             bi.hasMinMax = true;
@@ -299,7 +304,7 @@ VectorLayerInfo collectVectorMetadata(GDALDataset &ds) {
 
     info.name = layer->GetName();
     info.geometryType = ogrGeomTypeName(layer->GetGeomType());
-    info.featureCount = static_cast<int>(layer->GetFeatureCount());
+    info.featureCount = static_cast<int>(layer->GetFeatureCount(FALSE));
 
     const OGRSpatialReference *srs = layer->GetSpatialRef();
     if (srs) {

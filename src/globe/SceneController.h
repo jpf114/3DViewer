@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <QImage>
+
 #include "layers/GeographicBounds.h"
 #include "layers/Layer.h"
 
@@ -42,6 +44,8 @@ public:
     void initializeDefaultScene(int width, int height);
     void flyToGeographicBounds(const GeographicBounds &bounds, double durationSeconds = 1.5);
     void reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder);
+    void resetView();
+    QImage captureImage();
 
 private:
     void flushPendingLayers();

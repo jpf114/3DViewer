@@ -1,12 +1,10 @@
 build/
 install/
-.vs/
 *.user
 *.suo
 *.VC.db
 *.VC.opendb
 .idea/
-.vscode/
 CMakeSettings.json
 *.obj
 *.pdb
@@ -16,3 +14,7 @@ CMakeSettings.json
 *.log
 .DS_Store
 Thumbs.db
+data/image/*.zip
+data/image/*.html
+data/image/*.txt
+data/image/*.png

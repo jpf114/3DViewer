@@ -2,6 +2,10 @@
 
 #include <QStringList>
 #include <QMainWindow>
+#include <optional>
+
+struct RasterMetadata;
+struct VectorLayerInfo;
 
 class GlobeWidget;
 class LayerTreeDock;
@@ -10,6 +14,7 @@ class PropertyDock;
 class StatusBarController;
 class QAction;
 class QActionGroup;
+class QMenu;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -20,8 +25,12 @@ public:
     void addLayerRow(const Layer &layer);
     void removeLayerRow(const std::string &layerId);
     void showLayerDetails(const QString &text);
-    void showLayerProperties(const QString &layerId, const QString &infoText, double opacity, int bandCount = 0);
+    void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
+                             const QString &source, bool visible, double opacity,
+                             const std::optional<RasterMetadata> &rasterMeta,
+                             const std::optional<VectorLayerInfo> &vectorMeta);
     void clearLayerProperties();
+    void setRecentFiles(const QStringList &files);
 
 signals:
     void importDataRequested(const QString &path);
@@ -32,17 +41,27 @@ signals:
     void layerOpacityChanged(const QString &layerId, double opacity);
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
     void toolChanged(int toolId);
+    void resetViewRequested();
+    void zoomToLayerRequested(const QString &layerId);
+    void screenshotRequested();
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    void updateRecentMenu();
+
     GlobeWidget *globeWidget_;
     LayerTreeDock *layerDock_;
     PropertyDock *propertyDock_;
     StatusBarController *statusController_;
     QAction *panAction_;
     QAction *pickAction_;
+    QAction *homeAction_;
+    QAction *screenshotAction_;
     QActionGroup *toolGroup_;
+    QMenu *recentMenu_;
+    QStringList recentFiles_;
 };

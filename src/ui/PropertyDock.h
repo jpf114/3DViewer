@@ -1,10 +1,17 @@
 #pragma once
 
 #include <QDockWidget>
+#include <optional>
+
+struct RasterMetadata;
+struct VectorLayerInfo;
 
 class QComboBox;
 class QSlider;
 class QLabel;
+class QGroupBox;
+class QFormLayout;
+class QTableWidget;
 class QTextEdit;
 
 class PropertyDock : public QDockWidget {
@@ -13,7 +20,10 @@ class PropertyDock : public QDockWidget {
 public:
     explicit PropertyDock(QWidget *parent = nullptr);
     void showText(const QString &text);
-    void showLayerProperties(const QString &layerId, const QString &infoText, double opacity, int bandCount = 0);
+    void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
+                             const QString &source, bool visible, double opacity,
+                             const std::optional<RasterMetadata> &rasterMeta,
+                             const std::optional<VectorLayerInfo> &vectorMeta);
     void clearLayerProperties();
 
 signals:
@@ -33,4 +43,13 @@ private:
     QWidget *propertiesWidget_;
     QString currentLayerId_;
     int currentBandCount_ = 0;
+
+    QGroupBox *basicGroup_;
+    QFormLayout *basicForm_;
+    QGroupBox *rasterGroup_;
+    QFormLayout *rasterForm_;
+    QTableWidget *bandTable_;
+    QGroupBox *vectorGroup_;
+    QFormLayout *vectorForm_;
+    QTableWidget *fieldTable_;
 };
