@@ -22,11 +22,14 @@
 #include <osgEarth/Stroke>
 #include <osgEarth/Style>
 #include <osgEarth/StyleSheet>
+#include <osgEarth/TextSymbol>
 #include <osgEarth/URI>
 #include <osgEarth/VisibleLayer>
 #include <osgEarth/XYZ>
 #include <algorithm>
 #include <cmath>
+#include <numbers>
+#include <spdlog/spdlog.h>
 
 #include <osgGA/EventQueue>
 #include <osgViewer/GraphicsWindow>
@@ -36,10 +39,13 @@
 #include "globe/PickResult.h"
 #include "layers/Layer.h"
 
+#include <osgEarth/FeatureSourceIndexNode>
+
 struct SceneController::Impl {
     bool initialized = false;
     std::unordered_map<std::string, bool> layerVisibility;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
+    std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
     osg::ref_ptr<osgViewer::Viewer> viewer;
@@ -76,15 +82,44 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         featureSource->setName(layer.name() + " Source");
         featureSource->setURL(osgEarth::URI(layer.sourceUri()));
 
-        osgEarth::Style style("default");
-        style.getOrCreate<osgEarth::PointSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(1.0f, 0.65f, 0.2f, 1.0f));
-        style.getOrCreate<osgEarth::PointSymbol>()->size() = 6.0f;
-        style.getOrCreate<osgEarth::LineSymbol>()->stroke() = osgEarth::Stroke(osgEarth::Color(0.15f, 0.85f, 1.0f, 1.0f));
-        style.getOrCreate<osgEarth::PolygonSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(0.15f, 0.55f, 0.95f, 0.35f));
-        style.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+        osgEarth::Style pointStyle("point");
+        pointStyle.getOrCreate<osgEarth::PointSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(1.0f, 0.35f, 0.15f, 1.0f));
+        pointStyle.getOrCreate<osgEarth::PointSymbol>()->size() = 7.0f;
+        pointStyle.getOrCreate<osgEarth::PointSymbol>()->smooth() = true;
+        auto *pointText = pointStyle.getOrCreate<osgEarth::TextSymbol>();
+        pointText->fill() = osgEarth::Fill(osgEarth::Color::White);
+        pointText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
+        pointText->size() = osgEarth::Expression<float>("14");
+        pointText->content() = osgEarth::StringExpression("[name]");
+
+        osgEarth::Style lineStyle("line");
+        osgEarth::Stroke lineStroke(osgEarth::Color(0.15f, 0.85f, 1.0f, 1.0f));
+        lineStroke.width() = osgEarth::Expression<osgEarth::Distance>("2.5px");
+        lineStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = lineStroke;
+        lineStyle.getOrCreate<osgEarth::LineSymbol>()->tessellation() = 20;
+        lineStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+        auto *lineText = lineStyle.getOrCreate<osgEarth::TextSymbol>();
+        lineText->fill() = osgEarth::Fill(osgEarth::Color::White);
+        lineText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
+        lineText->size() = osgEarth::Expression<float>("14");
+        lineText->content() = osgEarth::StringExpression("[name]");
+
+        osgEarth::Style polygonStyle("polygon");
+        polygonStyle.getOrCreate<osgEarth::PolygonSymbol>()->fill() = osgEarth::Fill(osgEarth::Color(0.15f, 0.55f, 0.95f, 0.45f));
+        osgEarth::Stroke polyStroke(osgEarth::Color(0.1f, 0.4f, 0.85f, 1.0f));
+        polyStroke.width() = osgEarth::Expression<osgEarth::Distance>("1.5px");
+        polygonStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = polyStroke;
+        polygonStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+        auto *polyText = polygonStyle.getOrCreate<osgEarth::TextSymbol>();
+        polyText->fill() = osgEarth::Fill(osgEarth::Color::White);
+        polyText->halo() = osgEarth::Stroke(osgEarth::Color::Black);
+        polyText->size() = osgEarth::Expression<float>("14");
+        polyText->content() = osgEarth::StringExpression("[name]");
 
         auto styleSheet = osg::ref_ptr<osgEarth::StyleSheet>(new osgEarth::StyleSheet());
-        styleSheet->addStyle(style);
+        styleSheet->addStyle(pointStyle);
+        styleSheet->addStyle(lineStyle);
+        styleSheet->addStyle(polygonStyle);
 
         auto featureLayer = osg::ref_ptr<osgEarth::FeatureModelLayer>(new osgEarth::FeatureModelLayer());
         featureLayer->setName(layer.name());
@@ -129,18 +164,27 @@ SceneController &SceneController::operator=(SceneController &&) noexcept = defau
 void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     impl_->layerVisibility[layer->id()] = layer->visible();
 
-    if (!impl_->map || impl_->renderLayers.contains(layer->id())) {
+    if (impl_->renderLayers.contains(layer->id())) {
+        spdlog::warn("SceneController: layer '{}' already in scene, skipping", layer->id());
+        return;
+    }
+
+    if (!impl_->map) {
+        spdlog::info("SceneController: scene not initialized, queueing layer '{}'", layer->id());
+        impl_->pendingLayers.push_back(layer);
         return;
     }
 
     auto sceneLayer = createSceneLayer(*layer);
     if (!sceneLayer) {
+        spdlog::warn("SceneController: unsupported layer kind for '{}'", layer->id());
         return;
     }
 
     syncVisibleState(sceneLayer.get(), *layer);
     impl_->map->addLayer(sceneLayer.get());
     impl_->renderLayers[layer->id()] = sceneLayer;
+    spdlog::info("SceneController: added layer '{}' to scene", layer->id());
 }
 
 void SceneController::reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder) {
@@ -286,6 +330,15 @@ PickResult SceneController::pickAt(int x, int y) const {
     result.longitude = point.x();
     result.latitude = point.y();
     result.elevation = point.z();
+
+    for (const auto &[id, sceneLayer] : impl_->renderLayers) {
+        auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer.get());
+        if (visibleLayer && visibleLayer->getVisible()) {
+            result.layerId = id;
+            result.displayText = visibleLayer->getName();
+        }
+    }
+
     return result;
 }
 
@@ -301,6 +354,7 @@ void SceneController::removeLayer(const std::string &id) {
         impl_->map->removeLayer(it->second.get());
     }
     impl_->renderLayers.erase(it);
+    spdlog::info("SceneController: removed layer '{}' from scene", id);
 }
 
 std::size_t SceneController::renderedLayerCount() const {
@@ -326,6 +380,60 @@ void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     syncVisibleState(it->second.get(), *layer);
 }
 
+void SceneController::updateImageLayerBands(const std::shared_ptr<Layer> &layer) {
+    if (!layer || layer->kind() != LayerKind::Imagery) {
+        return;
+    }
+
+    const auto it = impl_->renderLayers.find(layer->id());
+    if (it == impl_->renderLayers.end()) {
+        return;
+    }
+
+    if (!impl_->map) {
+        return;
+    }
+
+    const auto &rm = layer->rasterMetadata();
+    if (!rm || rm->bandCount < 2) {
+        return;
+    }
+
+    impl_->map->removeLayer(it->second.get());
+
+    const int r = std::clamp(layer->redBand(), 1, rm->bandCount);
+    const int g = std::clamp(layer->greenBand(), 1, rm->bandCount);
+    const int b = std::clamp(layer->blueBand(), 1, rm->bandCount);
+
+    const std::string vrtXml = std::string(
+        "<VRTDataset rasterXSize=\"") + std::to_string(rm->rasterXSize) +
+        "\" rasterYSize=\"" + std::to_string(rm->rasterYSize) + "\">"
+        "<VRTRasterBand dataType=\"Byte\" band=\"1\">"
+        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<SourceBand>" + std::to_string(r) + "</SourceBand>"
+        "</SimpleSource>"
+        "</VRTRasterBand>"
+        "<VRTRasterBand dataType=\"Byte\" band=\"2\">"
+        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<SourceBand>" + std::to_string(g) + "</SourceBand>"
+        "</SimpleSource>"
+        "</VRTRasterBand>"
+        "<VRTRasterBand dataType=\"Byte\" band=\"3\">"
+        "<SimpleSource><SourceFilename>" + layer->sourceUri() + "</SourceFilename>"
+        "<SourceBand>" + std::to_string(b) + "</SourceBand>"
+        "</SimpleSource>"
+        "</VRTRasterBand>"
+        "</VRTDataset>";
+
+    auto imageLayer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
+    imageLayer->setName(layer->name());
+    imageLayer->setURL(osgEarth::URI(vrtXml));
+    syncVisibleState(imageLayer.get(), *layer);
+    impl_->map->addLayer(imageLayer.get());
+    impl_->renderLayers[layer->id()] = imageLayer;
+    spdlog::info("SceneController: updated band mapping for '{}' to R={} G={} B={}", layer->id(), r, g, b);
+}
+
 void SceneController::flyToGeographicBounds(const GeographicBounds &bounds, double durationSeconds) {
     if (!impl_->viewer) {
         return;
@@ -342,7 +450,7 @@ void SceneController::flyToGeographicBounds(const GeographicBounds &bounds, doub
 
     const double lat = 0.5 * (bounds.south + bounds.north);
     const double lon = 0.5 * (bounds.west + bounds.east);
-    const double latRad = lat * 3.14159265358979323846 / 180.0;
+    const double latRad = lat * std::numbers::pi / 180.0;
     constexpr double kMetersPerDegLat = 111320.0;
     const double mPerDegLon = (std::max)(1e-6, kMetersPerDegLat * std::cos(latRad));
     const double widthM = (bounds.east - bounds.west) * mPerDegLon;
@@ -371,4 +479,14 @@ void SceneController::initializeDefaultScene(int width, int height) {
     impl_->viewer->setSceneData(impl_->mapNode.get());
 
     impl_->initialized = true;
+    spdlog::info("SceneController: default scene initialized");
+    flushPendingLayers();
+}
+
+void SceneController::flushPendingLayers() {
+    auto pending = std::move(impl_->pendingLayers);
+    impl_->pendingLayers.clear();
+    for (const auto &layer : pending) {
+        addLayer(layer);
+    }
 }

@@ -54,5 +54,13 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    if (!verifyKind(importer, DataSourceKind::Chart, LayerKind::Chart, "chart")) {
+        return EXIT_FAILURE;
+    }
+
+    if (!verifyKind(importer, DataSourceKind::Scientific, LayerKind::Scientific, "scientific")) {
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }

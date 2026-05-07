@@ -4,3 +4,15 @@ install/
 *.user
 *.suo
 *.VC.db
+*.VC.opendb
+.idea/
+.vscode/
+CMakeSettings.json
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.log
+.DS_Store
+Thumbs.db

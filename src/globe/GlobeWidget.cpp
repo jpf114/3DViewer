@@ -24,7 +24,8 @@ unsigned int mapQtButton(Qt::MouseButton button) {
 GlobeWidget::GlobeWidget(QWidget *parent)
     : QWidget(parent),
       toolManager_(new ToolManager(this)),
-      frameTimer_(new QTimer(this)) {
+      frameTimer_(new QTimer(this)),
+      pickTimer_(new QTimer(this)) {
     setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setAttribute(Qt::WA_NoSystemBackground);
@@ -32,6 +33,11 @@ GlobeWidget::GlobeWidget(QWidget *parent)
     frameTimer_->setInterval(16);
     connect(frameTimer_, &QTimer::timeout, this, [this]() {
         sceneController_.frame();
+    });
+    pickTimer_->setSingleShot(true);
+    pickTimer_->setInterval(50);
+    connect(pickTimer_, &QTimer::timeout, this, [this]() {
+        performPick(lastPickX_, lastPickY_);
     });
 }
 
@@ -48,15 +54,12 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
     const float fy = flipY(static_cast<float>(event->position().y()));
     sceneController_.mouseMove(fx, fy);
 
-    const PickResult pick = sceneController_.pickAt(static_cast<int>(fx), static_cast<int>(fy));
-    if (pick.hit) {
-        emit cursorTextChanged(QString("Lon: %1, Lat: %2, Elev: %3")
-                                   .arg(pick.longitude, 0, 'f', 6)
-                                   .arg(pick.latitude, 0, 'f', 6)
-                                   .arg(pick.elevation, 0, 'f', 2));
-    } else {
-        emit cursorTextChanged("Lon: -, Lat: -, Elev: -");
+    lastPickX_ = static_cast<int>(fx);
+    lastPickY_ = static_cast<int>(fy);
+    if (!pickTimer_->isActive()) {
+        pickTimer_->start();
     }
+
     toolManager().mouseMoveEvent(*this, event);
     QWidget::mouseMoveEvent(event);
 }
@@ -82,12 +85,6 @@ void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
             button);
     }
     toolManager().mouseReleaseEvent(*this, event);
-    if (event->button() == Qt::LeftButton) {
-        const float fx = static_cast<float>(event->position().x());
-        const float fy = flipY(static_cast<float>(event->position().y()));
-        const PickResult pick = sceneController_.pickAt(static_cast<int>(fx), static_cast<int>(fy));
-        emit terrainPickCompleted(pick);
-    }
     QWidget::mouseReleaseEvent(event);
 }
 
@@ -118,4 +115,16 @@ void GlobeWidget::showEvent(QShowEvent *event) {
 
 float GlobeWidget::flipY(float y) const {
     return static_cast<float>(height()) - y;
+}
+
+void GlobeWidget::performPick(int x, int y) {
+    const PickResult pick = sceneController_.pickAt(x, y);
+    if (pick.hit) {
+        emit cursorTextChanged(QString("Lon: %1, Lat: %2, Elev: %3")
+                                   .arg(pick.longitude, 0, 'f', 6)
+                                   .arg(pick.latitude, 0, 'f', 6)
+                                   .arg(pick.elevation, 0, 'f', 2));
+    } else {
+        emit cursorTextChanged("Lon: -, Lat: -, Elev: -");
+    }
 }

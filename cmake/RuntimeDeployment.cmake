@@ -66,19 +66,26 @@ function(threeviewer_runtime_post_build target)
   endif()
 
   if(WIN32)
-    set(_dll_names
-      osg osgDB osgGA osgUtil osgViewer osgFX osgText osgEarth
-      OpenThreads gdal proj_9 geos geos_c spdlog
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${target}>
+        $<TARGET_FILE_DIR:${target}>
+      COMMAND_EXPAND_LISTS
+      COMMENT "Copying runtime DLLs via TARGET_RUNTIME_DLLS"
     )
-    foreach(_name ${_dll_names})
-      set(_dll_path "${_runtime_root}/bin/${_name}.dll")
-      if(EXISTS "${_dll_path}")
-        add_custom_command(TARGET ${target} POST_BUILD
-          COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${_dll_path}"
-            "$<TARGET_FILE_DIR:${target}>"
-        )
-      endif()
+
+    set(_qt_plugin_root
+      "$<IF:$<CONFIG:Debug>,${_runtime_root}/debug/Qt6/plugins,${_runtime_root}/Qt6/plugins>"
+    )
+    foreach(_plugin_dir platforms styles imageformats)
+      add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+          "$<TARGET_FILE_DIR:${target}>/${_plugin_dir}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${_qt_plugin_root}/${_plugin_dir}"
+          "$<TARGET_FILE_DIR:${target}>/${_plugin_dir}"
+        COMMENT "Copying Qt ${_plugin_dir} plugins"
+      )
     endforeach()
   endif()
 endfunction()
@@ -88,26 +95,6 @@ function(threeviewer_install_target_release_only target)
     RUNTIME DESTINATION .
     CONFIGURATIONS Release
   )
-endfunction()
-
-function(threeviewer_install_qt_windows_platform_release)
-  if(NOT WIN32)
-    return()
-  endif()
-
-  _threeviewer_detect_runtime_root(_runtime_root)
-  if(_runtime_root STREQUAL "")
-    return()
-  endif()
-
-  set(_qt_platform_dir "${_runtime_root}/Qt6/plugins/platforms")
-  if(EXISTS "${_qt_platform_dir}/qwindows.dll")
-    install(FILES "${_qt_platform_dir}/qwindows.dll"
-      DESTINATION platforms
-      CONFIGURATIONS Release
-      OPTIONAL
-    )
-  endif()
 endfunction()
 
 function(threeviewer_install_runtime_data_release)
@@ -140,7 +127,7 @@ function(threeviewer_install_runtime_data_release)
 
   if(_osg_plugins_dir AND EXISTS "${_osg_plugins_dir}")
     get_filename_component(_osg_plugins_name "${_osg_plugins_dir}" NAME)
-    install(DIRECTORY "${_osg_plugins_dir}"
+    install(DIRECTORY "${_osg_plugins_dir}/"
       DESTINATION "${_osg_plugins_name}"
       CONFIGURATIONS Release
     )
@@ -160,27 +147,40 @@ function(threeviewer_install_windows_packaging_extras)
   endif()
 endfunction()
 
-function(threeviewer_install_vcpkg_minimal_runtime)
+function(threeviewer_install_runtime_dlls target)
   if(NOT WIN32)
     return()
   endif()
+
+  install(FILES $<TARGET_RUNTIME_DLLS:${target}>
+    DESTINATION .
+    CONFIGURATIONS Release
+  )
+
+  install(CODE "
+    file(GLOB _build_dlls \"${CMAKE_BINARY_DIR}/Release/*.dll\")
+    if(_build_dlls)
+      file(INSTALL DESTINATION \"\${CMAKE_INSTALL_PREFIX}\"
+        TYPE SHARED_LIBRARY
+        FILES \${_build_dlls})
+    endif()
+  " CONFIGURATIONS Release)
 
   _threeviewer_detect_runtime_root(_runtime_root)
   if(_runtime_root STREQUAL "")
     return()
   endif()
 
-  set(_dll_names
-    osg osgDB osgGA osgUtil osgViewer osgFX osgText osgEarth
-    OpenThreads gdal proj_9 geos geos_c spdlog
-  )
-  foreach(_name ${_dll_names})
-    set(_dll_path "${_runtime_root}/bin/${_name}.dll")
-    if(EXISTS "${_dll_path}")
-      install(FILES "${_dll_path}"
-        DESTINATION .
-        CONFIGURATIONS Release
-      )
+  set(_qt_plugin_root "${_runtime_root}/Qt6/plugins")
+  foreach(_plugin_dir platforms styles imageformats)
+    if(EXISTS "${_qt_plugin_root}/${_plugin_dir}")
+      file(GLOB _plugin_dlls "${_qt_plugin_root}/${_plugin_dir}/*.dll")
+      if(_plugin_dlls)
+        install(FILES ${_plugin_dlls}
+          DESTINATION "${_plugin_dir}"
+          CONFIGURATIONS Release
+        )
+      endif()
     endif()
   endforeach()
 endfunction()

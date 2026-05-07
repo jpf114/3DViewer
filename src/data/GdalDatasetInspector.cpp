@@ -6,6 +6,7 @@
 #include <functional>
 #include <limits>
 #include <mutex>
+#include <spdlog/spdlog.h>
 
 #include <gdal_priv.h>
 #include <ogr_spatialref.h>
@@ -39,7 +40,22 @@ DataSourceKind classifyDataset(GDALDataset &dataset) {
         if (GDALRasterBand *band = dataset.GetRasterBand(1)) {
             const auto interpretation = band->GetColorInterpretation();
             if (interpretation == GCI_GrayIndex || interpretation == GCI_Undefined) {
-                return DataSourceKind::RasterElevation;
+                const char *unitType = band->GetUnitType();
+                if (unitType && (strcmp(unitType, "m") == 0 || strcmp(unitType, "metre") == 0 || strcmp(unitType, "meter") == 0)) {
+                    return DataSourceKind::RasterElevation;
+                }
+                const auto nodata = band->GetNoDataValue();
+                int hasNodata = 0;
+                band->GetNoDataValue(&hasNodata);
+                if (hasNodata && nodata < -9999.0) {
+                    return DataSourceKind::RasterElevation;
+                }
+                double adfMinMax[2] = {0.0, 0.0};
+                band->ComputeRasterMinMax(true, adfMinMax);
+                if (adfMinMax[0] < -500.0 || adfMinMax[1] > 9000.0) {
+                    return DataSourceKind::RasterElevation;
+                }
+                return DataSourceKind::RasterImagery;
             }
         }
     }
@@ -166,12 +182,160 @@ std::optional<GeographicBounds> computeGeographicBounds(GDALDataset &ds, DataSou
 
 } // namespace
 
+const char *gdalDataTypeName(GDALDataType dt) {
+    switch (dt) {
+    case GDT_Byte: return "Byte";
+    case GDT_UInt16: return "UInt16";
+    case GDT_Int16: return "Int16";
+    case GDT_UInt32: return "UInt32";
+    case GDT_Int32: return "Int32";
+    case GDT_Float32: return "Float32";
+    case GDT_Float64: return "Float64";
+    default: return "Unknown";
+    }
+}
+
+const char *colorInterpName(GDALColorInterp ci) {
+    switch (ci) {
+    case GCI_Undefined: return "Undefined";
+    case GCI_GrayIndex: return "Gray";
+    case GCI_PaletteIndex: return "Palette";
+    case GCI_RedBand: return "Red";
+    case GCI_GreenBand: return "Green";
+    case GCI_BlueBand: return "Blue";
+    case GCI_AlphaBand: return "Alpha";
+    case GCI_HueBand: return "Hue";
+    case GCI_SaturationBand: return "Saturation";
+    case GCI_LightnessBand: return "Lightness";
+    case GCI_CyanBand: return "Cyan";
+    case GCI_MagentaBand: return "Magenta";
+    case GCI_YellowBand: return "Yellow";
+    case GCI_BlackBand: return "Black";
+    case GCI_YCbCr_YBand: return "Y";
+    case GCI_YCbCr_CbBand: return "Cb";
+    case GCI_YCbCr_CrBand: return "Cr";
+    default: return "Unknown";
+    }
+}
+
+RasterMetadata collectRasterMetadata(GDALDataset &ds) {
+    RasterMetadata meta;
+    meta.rasterXSize = ds.GetRasterXSize();
+    meta.rasterYSize = ds.GetRasterYSize();
+    meta.bandCount = ds.GetRasterCount();
+    meta.driverName = ds.GetDriverName();
+
+    const OGRSpatialReference *srs = ds.GetSpatialRef();
+    if (srs) {
+        char *wkt = nullptr;
+        srs->exportToWkt(&wkt);
+        if (wkt) {
+            meta.crsWkt = wkt;
+            CPLFree(wkt);
+        }
+        const char *authName = srs->GetAuthorityName(nullptr);
+        const char *authCode = srs->GetAuthorityCode(nullptr);
+        if (authName && authCode && strcmp(authName, "EPSG") == 0) {
+            meta.epsgCode = std::string("EPSG:") + authCode;
+        }
+    }
+
+    double gt[6];
+    if (ds.GetGeoTransform(gt) == CE_None) {
+        meta.pixelSizeX = std::abs(gt[1]);
+        meta.pixelSizeY = std::abs(gt[5]);
+    }
+
+    for (int i = 1; i <= ds.GetRasterCount(); ++i) {
+        GDALRasterBand *band = ds.GetRasterBand(i);
+        BandInfo bi;
+        bi.index = i;
+        bi.dataType = gdalDataTypeName(band->GetRasterDataType());
+        bi.colorInterpretation = colorInterpName(band->GetColorInterpretation());
+        const char *desc = band->GetDescription();
+        if (desc && desc[0] != '\0') {
+            bi.description = desc;
+        }
+        int hasNodata = 0;
+        bi.noDataValue = band->GetNoDataValue(&hasNodata);
+        bi.hasNoDataValue = hasNodata != 0;
+        double adfMinMax[2] = {0.0, 0.0};
+        if (band->ComputeRasterMinMax(true, adfMinMax) == CE_None) {
+            bi.min = adfMinMax[0];
+            bi.max = adfMinMax[1];
+            bi.hasMinMax = true;
+        }
+        meta.bands.push_back(bi);
+    }
+
+    return meta;
+}
+
+const char *ogrGeomTypeName(OGRwkbGeometryType gt) {
+    switch (gt) {
+    case wkbPoint: return "Point";
+    case wkbMultiPoint: return "MultiPoint";
+    case wkbLineString: return "LineString";
+    case wkbMultiLineString: return "MultiLineString";
+    case wkbPolygon: return "Polygon";
+    case wkbMultiPolygon: return "MultiPolygon";
+    case wkbGeometryCollection: return "GeometryCollection";
+    case wkbPoint25D: return "PointZ";
+    case wkbMultiPoint25D: return "MultiPointZ";
+    case wkbLineString25D: return "LineStringZ";
+    case wkbMultiLineString25D: return "MultiLineStringZ";
+    case wkbPolygon25D: return "PolygonZ";
+    case wkbMultiPolygon25D: return "MultiPolygonZ";
+    default: return "Unknown";
+    }
+}
+
+VectorLayerInfo collectVectorMetadata(GDALDataset &ds) {
+    VectorLayerInfo info;
+    OGRLayer *layer = ds.GetLayer(0);
+    if (!layer) {
+        return info;
+    }
+
+    info.name = layer->GetName();
+    info.geometryType = ogrGeomTypeName(layer->GetGeomType());
+    info.featureCount = static_cast<int>(layer->GetFeatureCount());
+
+    const OGRSpatialReference *srs = layer->GetSpatialRef();
+    if (srs) {
+        const char *authName = srs->GetAuthorityName(nullptr);
+        const char *authCode = srs->GetAuthorityCode(nullptr);
+        if (authName && authCode && strcmp(authName, "EPSG") == 0) {
+            info.epsgCode = std::string("EPSG:") + authCode;
+        }
+    }
+
+    const OGRFeatureDefn *defn = layer->GetLayerDefn();
+    for (int i = 0; i < defn->GetFieldCount(); ++i) {
+        const OGRFieldDefn *field = defn->GetFieldDefn(i);
+        VectorFieldInfo fi;
+        fi.name = field->GetNameRef();
+        fi.typeName = field->GetFieldTypeName(field->GetType());
+        info.fields.push_back(fi);
+    }
+
+    return info;
+}
+
 std::optional<DataSourceDescriptor> GdalDatasetInspector::inspect(const std::string &path) const {
     ensureGdalRegistered();
 
-    GDALDataset *dataset =
-        static_cast<GDALDataset *>(GDALOpenEx(path.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR | GDAL_OF_RASTER, nullptr, nullptr, nullptr));
-    if (dataset == nullptr) {
+    struct DatasetCloser {
+        void operator()(GDALDataset *ds) const {
+            if (ds) GDALClose(ds);
+        }
+    };
+    using DatasetPtr = std::unique_ptr<GDALDataset, DatasetCloser>;
+
+    DatasetPtr dataset(
+        static_cast<GDALDataset *>(GDALOpenEx(path.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR | GDAL_OF_RASTER, nullptr, nullptr, nullptr)));
+    if (!dataset) {
+        spdlog::debug("GdalDatasetInspector: failed to open '{}'", path);
         return std::nullopt;
     }
 
@@ -194,6 +358,12 @@ std::optional<DataSourceDescriptor> GdalDatasetInspector::inspect(const std::str
         descriptor.geographicBounds = *bounds;
     }
 
-    GDALClose(dataset);
+    if (kind == DataSourceKind::Vector) {
+        descriptor.vectorMetadata = collectVectorMetadata(*dataset);
+    } else {
+        descriptor.rasterMetadata = collectRasterMetadata(*dataset);
+    }
+
+    spdlog::info("GdalDatasetInspector: inspected '{}' as kind={} id={}", path, static_cast<int>(kind), layerId);
     return descriptor;
 }

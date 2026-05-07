@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 
+#include "data/DataSourceDescriptor.h"
 #include "layers/GeographicBounds.h"
 #include "layers/LayerTypes.h"
 
@@ -24,6 +25,17 @@ public:
     void setGeographicBounds(const GeographicBounds &bounds);
     std::optional<GeographicBounds> geographicBounds() const;
 
+    void setRasterMetadata(const RasterMetadata &meta);
+    std::optional<RasterMetadata> rasterMetadata() const;
+
+    void setVectorMetadata(const VectorLayerInfo &meta);
+    std::optional<VectorLayerInfo> vectorMetadata() const;
+
+    void setBandMapping(int redBand, int greenBand, int blueBand);
+    int redBand() const;
+    int greenBand() const;
+    int blueBand() const;
+
 private:
     std::string id_;
     std::string name_;
@@ -32,4 +44,9 @@ private:
     bool visible_ = true;
     double opacity_ = 1.0;
     std::optional<GeographicBounds> geographicBounds_;
+    std::optional<RasterMetadata> rasterMetadata_;
+    std::optional<VectorLayerInfo> vectorMetadata_;
+    int redBand_ = 1;
+    int greenBand_ = 2;
+    int blueBand_ = 3;
 };

@@ -48,3 +48,29 @@ void Layer::setGeographicBounds(const GeographicBounds &bounds) {
 std::optional<GeographicBounds> Layer::geographicBounds() const {
     return geographicBounds_;
 }
+
+void Layer::setRasterMetadata(const RasterMetadata &meta) {
+    rasterMetadata_ = meta;
+}
+
+std::optional<RasterMetadata> Layer::rasterMetadata() const {
+    return rasterMetadata_;
+}
+
+void Layer::setVectorMetadata(const VectorLayerInfo &meta) {
+    vectorMetadata_ = meta;
+}
+
+std::optional<VectorLayerInfo> Layer::vectorMetadata() const {
+    return vectorMetadata_;
+}
+
+void Layer::setBandMapping(int redBand, int greenBand, int blueBand) {
+    redBand_ = redBand;
+    greenBand_ = greenBand;
+    blueBand_ = blueBand;
+}
+
+int Layer::redBand() const { return redBand_; }
+int Layer::greenBand() const { return greenBand_; }
+int Layer::blueBand() const { return blueBand_; }

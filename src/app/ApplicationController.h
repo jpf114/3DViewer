@@ -20,6 +20,9 @@ public:
     void importFile(const std::string &path);
     void showLayerDetails(const std::string &layerId);
     void setLayerVisibility(const std::string &layerId, bool visible);
+    void setLayerOpacity(const std::string &layerId, double opacity);
+    void setBandMapping(const std::string &layerId, int red, int green, int blue);
+    void removeLayer(const std::string &layerId);
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);

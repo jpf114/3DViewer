@@ -32,8 +32,12 @@ protected:
 
 private:
     float flipY(float y) const;
+    void performPick(int x, int y);
 
     SceneController sceneController_;
     ToolManager *toolManager_;
     QTimer *frameTimer_;
+    QTimer *pickTimer_;
+    int lastPickX_ = 0;
+    int lastPickY_ = 0;
 };

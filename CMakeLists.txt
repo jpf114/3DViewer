@@ -5,23 +5,27 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+endif()
+
 if(CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_INSTALL_DEFAULT_CONFIG_NAME "Release" CACHE STRING
-    "Default configuration for cmake --install (and build) when none is given.")
+    set(CMAKE_INSTALL_DEFAULT_CONFIG_NAME "Release" CACHE STRING
+        "Default configuration for cmake --install when none is given.")
 endif()
 
 if(NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 endif()
 if(NOT DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 endif()
 if(NOT DEFINED CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
-  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 endif()
 
 if(NOT CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
@@ -48,6 +52,7 @@ add_executable(ThreeDViewer
     src/globe/SceneController.cpp
     src/layers/Layer.cpp
     src/layers/LayerManager.cpp
+    src/tools/PickTool.cpp
     src/tools/ToolManager.cpp
     src/ui/LayerTreeDock.cpp
     src/ui/PropertyDock.cpp
@@ -55,6 +60,14 @@ add_executable(ThreeDViewer
 )
 
 set_target_properties(ThreeDViewer PROPERTIES OUTPUT_NAME 3DViewer)
+
+if(MSVC)
+    target_compile_options(ThreeDViewer PRIVATE /utf-8 /W4 /WX- /wd4819)
+    target_compile_definitions(ThreeDViewer PRIVATE
+        _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING
+        _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS
+    )
+endif()
 
 target_include_directories(ThreeDViewer PRIVATE src)
 target_link_libraries(ThreeDViewer
@@ -74,23 +87,22 @@ target_link_libraries(ThreeDViewer
 threeviewer_runtime_post_build(ThreeDViewer)
 
 if(WIN32)
-  add_custom_command(TARGET ThreeDViewer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/packaging/fonts.conf"
-      "$<TARGET_FILE_DIR:ThreeDViewer>/fonts.conf"
-    COMMENT "Minimal fontconfig (FONTCONFIG_FILE) for Windows")
+    add_custom_command(TARGET ThreeDViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/fonts.conf"
+            "$<TARGET_FILE_DIR:ThreeDViewer>/fonts.conf"
+        COMMENT "Minimal fontconfig (FONTCONFIG_FILE) for Windows")
 endif()
 
 enable_testing()
 add_subdirectory(tests)
 
 if(WIN32)
-  threeviewer_install_target_release_only(ThreeDViewer)
-  threeviewer_install_qt_windows_platform_release()
-  threeviewer_install_runtime_data_release()
-  threeviewer_install_windows_packaging_extras()
-  threeviewer_install_vcpkg_minimal_runtime()
+    threeviewer_install_target_release_only(ThreeDViewer)
+    threeviewer_install_runtime_data_release()
+    threeviewer_install_runtime_dlls(ThreeDViewer)
+    threeviewer_install_windows_packaging_extras()
 else()
-  install(TARGETS ThreeDViewer RUNTIME DESTINATION bin)
+    install(TARGETS ThreeDViewer RUNTIME DESTINATION bin)
 endif()
 threeviewer_install_windeployqt_at_install()

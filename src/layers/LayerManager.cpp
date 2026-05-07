@@ -5,8 +5,17 @@
 
 #include "layers/Layer.h"
 
-void LayerManager::addLayer(const std::shared_ptr<Layer> &layer) {
+bool LayerManager::addLayer(const std::shared_ptr<Layer> &layer) {
+    if (!layer) {
+        return false;
+    }
+
+    if (findById(layer->id()) != nullptr) {
+        return false;
+    }
+
     layers_.push_back(layer);
+    return true;
 }
 
 std::shared_ptr<Layer> LayerManager::findById(const std::string &id) const {
@@ -64,4 +73,15 @@ void LayerManager::setVisibility(const std::string &id, bool visible) {
     if (layer) {
         layer->setVisible(visible);
     }
+}
+
+bool LayerManager::removeLayer(const std::string &id) {
+    const auto it = std::find_if(layers_.begin(), layers_.end(), [&id](const std::shared_ptr<Layer> &layer) {
+        return layer->id() == id;
+    });
+    if (it == layers_.end()) {
+        return false;
+    }
+    layers_.erase(it);
+    return true;
 }

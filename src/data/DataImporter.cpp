@@ -3,8 +3,10 @@
 #include <memory>
 #include <spdlog/spdlog.h>
 
+#include "layers/ChartLayer.h"
 #include "layers/ElevationLayer.h"
 #include "layers/ImageryLayer.h"
+#include "layers/ScientificLayer.h"
 #include "layers/VectorLayer.h"
 
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
@@ -29,10 +31,24 @@ std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descript
     case DataSourceKind::Vector:
         layer = std::make_shared<VectorLayer>(descriptor.id, descriptor.name, descriptor.path);
         break;
+    case DataSourceKind::Chart:
+        layer = std::make_shared<ChartLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
+    case DataSourceKind::Scientific:
+        layer = std::make_shared<ScientificLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
     }
 
     if (layer && descriptor.geographicBounds.has_value() && descriptor.geographicBounds->isValid()) {
         layer->setGeographicBounds(*descriptor.geographicBounds);
+    }
+
+    if (layer && descriptor.rasterMetadata.has_value()) {
+        layer->setRasterMetadata(*descriptor.rasterMetadata);
+    }
+
+    if (layer && descriptor.vectorMetadata.has_value()) {
+        layer->setVectorMetadata(*descriptor.vectorMetadata);
     }
 
     return layer;
