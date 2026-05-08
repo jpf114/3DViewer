@@ -28,12 +28,20 @@ int main() {
     imageryEntry.bandMapping = BandMappingEntry{4, 3, 2};
     config.layers.push_back(imageryEntry);
 
+    LayerEntry modelEntry;
+    modelEntry.id = "model-1";
+    modelEntry.name = "Building";
+    modelEntry.path = "model/building.glb";
+    modelEntry.kind = "model";
+    modelEntry.modelPlacement = ModelPlacementEntry{120.12, 30.28, 15.0, 2.5, 45.0};
+    config.layers.push_back(modelEntry);
+
     if (!saveLayerConfig(dir.path().toStdString(), config)) {
         return EXIT_FAILURE;
     }
 
     const auto loaded = loadLayerConfig(dir.path().toStdString());
-    if (!loaded.has_value() || loaded->layers.size() != 2) {
+    if (!loaded.has_value() || loaded->layers.size() != 3) {
         return EXIT_FAILURE;
     }
 
@@ -48,6 +56,15 @@ int main() {
     if (loaded->layers[1].bandMapping->red != 4 ||
         loaded->layers[1].bandMapping->green != 3 ||
         loaded->layers[1].bandMapping->blue != 2) {
+        return EXIT_FAILURE;
+    }
+
+    if (!loaded->layers[2].modelPlacement.has_value()) {
+        return EXIT_FAILURE;
+    }
+
+    if (loaded->layers[2].modelPlacement->scale != 2.5 ||
+        loaded->layers[2].modelPlacement->heading != 45.0) {
         return EXIT_FAILURE;
     }
 

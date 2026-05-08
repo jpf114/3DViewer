@@ -75,7 +75,7 @@ MainWindow::MainWindow(QWidget *parent)
     importAction->setShortcut(QKeySequence::Open);
     connect(importAction, &QAction::triggered, this, [this]() {
         const QString filter =
-            u"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;所有文件 (*)"_s;
+            u"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;三维模型 (*.gltf *.glb);;所有文件 (*)"_s;
         const QString path = QFileDialog::getOpenFileName(this, u"导入数据"_s, QString(), filter);
         if (!path.isEmpty()) {
             emit importDataRequested(path);

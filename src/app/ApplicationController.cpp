@@ -1,17 +1,17 @@
 #include "app/ApplicationController.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QImage>
 #include <QMessageBox>
 #include <QObject>
 #include <QSettings>
 #include <QStatusBar>
 #include <QString>
-#include <QStringLiteral>
 #include <QStringList>
-#include <QDir>
-#include <QFileInfo>
+#include <QStringLiteral>
 #include <spdlog/spdlog.h>
 #include <vector>
 
@@ -19,8 +19,8 @@ using namespace Qt::Literals::StringLiterals;
 
 #include "app/MainWindow.h"
 #include "data/DataImporter.h"
-#include "data/MapConfig.h"
 #include "data/LayerConfig.h"
+#include "data/MapConfig.h"
 #include "globe/GlobeWidget.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
@@ -40,6 +40,8 @@ QString layerKindToText(LayerKind kind) {
         return u"高程"_s;
     case LayerKind::Vector:
         return u"矢量"_s;
+    case LayerKind::Model:
+        return u"三维模型"_s;
     case LayerKind::Chart:
         return u"海图"_s;
     case LayerKind::Scientific:
@@ -69,6 +71,7 @@ bool isRenderableLayerKind(LayerKind kind) {
     case LayerKind::Imagery:
     case LayerKind::Elevation:
     case LayerKind::Vector:
+    case LayerKind::Model:
         return true;
     case LayerKind::Chart:
     case LayerKind::Scientific:
@@ -82,12 +85,13 @@ std::optional<LayerKind> parseLayerKind(const std::string &kind) {
     if (kind == "imagery") return LayerKind::Imagery;
     if (kind == "elevation") return LayerKind::Elevation;
     if (kind == "vector") return LayerKind::Vector;
+    if (kind == "model") return LayerKind::Model;
     if (kind == "chart") return LayerKind::Chart;
     if (kind == "scientific") return LayerKind::Scientific;
     return std::nullopt;
 }
 
-}
+} // namespace
 
 ApplicationController::ApplicationController(MainWindow &window,
                                              SceneController &sceneController,
@@ -178,9 +182,12 @@ void ApplicationController::importFile(const std::string &path) {
         if (!layer) {
             spdlog::warn("ApplicationController: import failed for '{}'", importPath);
             window_.statusBar()->showMessage(u"导入失败。"_s, 3000);
-            QMessageBox::warning(&window_, u"导入失败"_s,
-                                 QString(u"不支持或无法读取的数据源：\n%1\n\n支持的格式包括 GeoTIFF (.tif)、IMG (.img)、Shapefile (.shp)、\nGeoJSON (.geojson/.json)、GeoPackage (.gpkg)、KML (.kml)、GML (.gml) 等。"_s)
-                                     .arg(utf8(importPath)));
+            QMessageBox::warning(
+                &window_,
+                u"导入失败"_s,
+                QString(
+                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 glTF/glb 三维模型。"_s)
+                    .arg(utf8(importPath)));
             return;
         }
 
@@ -369,12 +376,14 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
     }
 
     for (const auto &entry : layerConfig->layers) {
-        if (!entry.autoload) continue;
+        if (!entry.autoload) {
+            continue;
+        }
 
         if (const auto kind = parseLayerKind(entry.kind); kind.has_value() && !isRenderableLayerKind(*kind)) {
             spdlog::warn("ApplicationController: skipping unsupported persisted layer '{}' kind={}", entry.id, entry.kind);
             window_.statusBar()->showMessage(
-                QString(u"宸茶烦杩囨湭鏀寔鐨勬寔涔呭寲鍥惧眰锛?1"_s).arg(QString::fromStdString(entry.name)), 5000);
+                QString(u"已跳过未支持的持久化图层：%1"_s).arg(QString::fromStdString(entry.name)), 5000);
             continue;
         }
 
@@ -403,6 +412,15 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
         if (entry.bandMapping.has_value() && layer->kind() == LayerKind::Imagery) {
             layer->setBandMapping(entry.bandMapping->red, entry.bandMapping->green, entry.bandMapping->blue);
         }
+        if (entry.modelPlacement.has_value() && layer->kind() == LayerKind::Model) {
+            ModelPlacement placement;
+            placement.longitude = entry.modelPlacement->longitude;
+            placement.latitude = entry.modelPlacement->latitude;
+            placement.height = entry.modelPlacement->height;
+            placement.scale = entry.modelPlacement->scale;
+            placement.heading = entry.modelPlacement->heading;
+            layer->setModelPlacement(placement);
+        }
 
         sceneController_.addLayer(layer);
         window_.addLayerRow(*layer);
@@ -427,6 +445,7 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
         case LayerKind::Imagery: entry.kind = "imagery"; break;
         case LayerKind::Elevation: entry.kind = "elevation"; break;
         case LayerKind::Vector: entry.kind = "vector"; break;
+        case LayerKind::Model: entry.kind = "model"; break;
         case LayerKind::Chart: entry.kind = "chart"; break;
         case LayerKind::Scientific: entry.kind = "scientific"; break;
         }
@@ -439,6 +458,19 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
                 bm.green = layer->greenBand();
                 bm.blue = layer->blueBand();
                 entry.bandMapping = bm;
+            }
+        }
+
+        if (layer->kind() == LayerKind::Model) {
+            const auto placement = layer->modelPlacement();
+            if (placement.has_value()) {
+                ModelPlacementEntry savedPlacement;
+                savedPlacement.longitude = placement->longitude;
+                savedPlacement.latitude = placement->latitude;
+                savedPlacement.height = placement->height;
+                savedPlacement.scale = placement->scale;
+                savedPlacement.heading = placement->heading;
+                entry.modelPlacement = savedPlacement;
             }
         }
 

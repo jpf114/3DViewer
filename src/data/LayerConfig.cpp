@@ -27,6 +27,17 @@ LayerEntry parseLayerEntry(const QJsonObject &obj) {
         entry.bandMapping = bandMapping;
     }
 
+    const QJsonObject mp = obj["modelPlacement"].toObject();
+    if (!mp.isEmpty()) {
+        ModelPlacementEntry placement;
+        placement.longitude = mp["longitude"].toDouble(0.0);
+        placement.latitude = mp["latitude"].toDouble(0.0);
+        placement.height = mp["height"].toDouble(0.0);
+        placement.scale = mp["scale"].toDouble(1.0);
+        placement.heading = mp["heading"].toDouble(0.0);
+        entry.modelPlacement = placement;
+    }
+
     return entry;
 }
 
@@ -48,6 +59,18 @@ QJsonObject serializeLayerEntry(const LayerEntry &entry) {
         obj["bandMapping"] = bm;
     } else {
         obj["bandMapping"] = QJsonValue::Null;
+    }
+
+    if (entry.modelPlacement.has_value()) {
+        QJsonObject mp;
+        mp["longitude"] = entry.modelPlacement->longitude;
+        mp["latitude"] = entry.modelPlacement->latitude;
+        mp["height"] = entry.modelPlacement->height;
+        mp["scale"] = entry.modelPlacement->scale;
+        mp["heading"] = entry.modelPlacement->heading;
+        obj["modelPlacement"] = mp;
+    } else {
+        obj["modelPlacement"] = QJsonValue::Null;
     }
 
     return obj;

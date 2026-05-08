@@ -7,11 +7,16 @@
 #endif
 
 #include <osg/Camera>
+#include <osg/Group>
 #include <osg/GraphicsContext>
 #include <osg/Image>
+#include <osg/Material>
+#include <osg/PositionAttitudeTransform>
 #include <osg/Viewport>
+#include <osgDB/ReadFile>
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
+#include <osgEarth/GeoTransform>
 #include <osgEarth/Viewpoint>
 #include <osgEarth/FeatureDisplayLayout>
 #include <osgEarth/FeatureModelLayer>
@@ -33,6 +38,7 @@
 #include <osgEarth/TextSymbol>
 #include <osgEarth/URI>
 #include <osgEarth/VisibleLayer>
+#include <osgEarth/SpatialReference>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -67,10 +73,13 @@ struct SceneController::Impl {
     HWND hwnd = nullptr;
     std::unordered_map<std::string, std::shared_ptr<Layer>> appLayers;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
+    std::unordered_map<std::string, osg::ref_ptr<osg::Node>> renderModelNodes;
     std::vector<std::string> orderedLayerIds;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
+    osg::ref_ptr<osg::Group> rootNode;
+    osg::ref_ptr<osg::Group> modelRoot;
     osg::ref_ptr<osgViewer::Viewer> viewer;
     osg::ref_ptr<osgViewer::GraphicsWindow> graphicsWindow;
     osg::ref_ptr<osgEarth::ImageLayer> baseLayer;
@@ -88,6 +97,7 @@ constexpr double kFlyToRangeMultiplier = 1.75;
 constexpr double kFlyToMinRange = 200.0;
 constexpr double kFlyToMaxRange = 4.0e7;
 constexpr double kMetersPerDegLat = 111320.0;
+constexpr double kDefaultModelRadiusMeters = 50.0;
 
 std::string escapeXml(const std::string &input) {
     std::string output;
@@ -262,6 +272,75 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
     return nullptr;
 }
 
+GeographicBounds approximateBoundsForModel(const ModelPlacement &placement, double radiusMeters) {
+    const double safeRadius = (std::max)(radiusMeters, 1.0);
+    const double latDelta = safeRadius / kMetersPerDegLat;
+    const double lonScale = (std::max)(1.0e-6, std::cos(placement.latitude * std::numbers::pi / 180.0));
+    const double lonDelta = safeRadius / (kMetersPerDegLat * lonScale);
+    return GeographicBounds{
+        placement.longitude - lonDelta,
+        placement.latitude - latDelta,
+        placement.longitude + lonDelta,
+        placement.latitude + latDelta,
+    };
+}
+
+void syncModelState(osg::Node *sceneNode, const Layer &layer) {
+    if (sceneNode == nullptr) {
+        return;
+    }
+
+    sceneNode->setNodeMask(layer.visible() ? ~0u : 0u);
+
+    osg::StateSet *stateSet = sceneNode->getOrCreateStateSet();
+    auto material = osg::ref_ptr<osg::Material>(new osg::Material());
+    const float alpha = static_cast<float>(std::clamp(layer.opacity(), 0.0, 1.0));
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(1.0f, 1.0f, 1.0f, alpha));
+    material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4(1.0f, 1.0f, 1.0f, alpha));
+    material->setAlpha(osg::Material::FRONT_AND_BACK, alpha);
+    stateSet->setAttributeAndModes(material.get(), osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+    stateSet->setMode(GL_BLEND, alpha < 1.0f ? (osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE)
+                                             : (osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE));
+    stateSet->setRenderingHint(alpha < 1.0f ? osg::StateSet::TRANSPARENT_BIN : osg::StateSet::DEFAULT_BIN);
+}
+
+osg::ref_ptr<osg::Node> createModelSceneNode(Layer &layer, GeographicBounds *bounds) {
+    const auto placement = layer.modelPlacement().value_or(ModelPlacement{});
+    auto modelNode = osgDB::readRefNodeFile(layer.sourceUri());
+    if (!modelNode) {
+        spdlog::warn("SceneController: failed to read model '{}'", layer.sourceUri());
+        return nullptr;
+    }
+
+    const double safeScale = placement.scale > 0.0 ? placement.scale : 1.0;
+    auto modelTransform = osg::ref_ptr<osg::PositionAttitudeTransform>(new osg::PositionAttitudeTransform());
+    modelTransform->setScale(osg::Vec3d(safeScale, safeScale, safeScale));
+    modelTransform->setAttitude(osg::Quat(
+        placement.heading * std::numbers::pi / 180.0,
+        osg::Vec3d(0.0, 0.0, 1.0)));
+    modelTransform->addChild(modelNode.get());
+
+    auto geoTransform = osg::ref_ptr<osgEarth::GeoTransform>(new osgEarth::GeoTransform());
+    geoTransform->setPosition(osgEarth::GeoPoint(
+        osgEarth::SpatialReference::get("wgs84"),
+        placement.longitude,
+        placement.latitude,
+        placement.height,
+        osgEarth::ALTMODE_ABSOLUTE));
+    geoTransform->addChild(modelTransform.get());
+
+    syncModelState(geoTransform.get(), layer);
+
+    const double radiusMeters = (std::max)(
+        kDefaultModelRadiusMeters,
+        static_cast<double>(modelNode->getBound().radius()) * safeScale);
+    if (bounds != nullptr) {
+        *bounds = approximateBoundsForModel(placement, radiusMeters);
+    }
+
+    return geoTransform;
+}
+
 void syncVisibleState(osgEarth::Layer *sceneLayer, const Layer &layer) {
     auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer);
     if (visibleLayer == nullptr) {
@@ -294,18 +373,36 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
         impl_->orderedLayerIds.push_back(layer->id());
     }
 
-    if (impl_->renderLayers.contains(layer->id())) {
+    if (impl_->renderLayers.contains(layer->id()) || impl_->renderModelNodes.contains(layer->id())) {
         spdlog::warn("SceneController: layer '{}' already in scene, skipping", layer->id());
         return;
     }
 
-    if (!impl_->map) {
+    if (!impl_->map || !impl_->modelRoot) {
         spdlog::info("SceneController: scene not initialized, queueing layer '{}'", layer->id());
         impl_->pendingLayers.push_back(layer);
         return;
     }
 
     spdlog::info("SceneController: creating scene layer for '{}' kind={}", layer->id(), static_cast<int>(layer->kind()));
+
+    if (layer->kind() == LayerKind::Model) {
+        GeographicBounds bounds{};
+        auto sceneNode = createModelSceneNode(*layer, &bounds);
+        if (!sceneNode) {
+            spdlog::warn("SceneController: unsupported model source for '{}'", layer->id());
+            return;
+        }
+
+        if (bounds.isValid()) {
+            layer->setGeographicBounds(bounds);
+        }
+
+        impl_->modelRoot->addChild(sceneNode.get());
+        impl_->renderModelNodes[layer->id()] = sceneNode;
+        spdlog::info("SceneController: added model layer '{}' to scene", layer->id());
+        return;
+    }
 
     auto sceneLayer = createSceneLayer(*layer);
     if (!sceneLayer) {
@@ -382,6 +479,11 @@ bool SceneController::hasViewer() const {
 }
 
 bool SceneController::isLayerVisibleInScene(const std::string &id) const {
+    const auto modelIt = impl_->renderModelNodes.find(id);
+    if (modelIt != impl_->renderModelNodes.end()) {
+        return modelIt->second.valid() && modelIt->second->getNodeMask() != 0u;
+    }
+
     const auto it = impl_->renderLayers.find(id);
     if (it == impl_->renderLayers.end()) {
         return false;
@@ -492,6 +594,17 @@ void SceneController::removeLayer(const std::string &id) {
     impl_->orderedLayerIds.erase(
         std::remove(impl_->orderedLayerIds.begin(), impl_->orderedLayerIds.end(), id),
         impl_->orderedLayerIds.end());
+
+    const auto modelIt = impl_->renderModelNodes.find(id);
+    if (modelIt != impl_->renderModelNodes.end()) {
+        if (impl_->modelRoot) {
+            impl_->modelRoot->removeChild(modelIt->second.get());
+        }
+        impl_->renderModelNodes.erase(modelIt);
+        spdlog::info("SceneController: removed model layer '{}' from scene", id);
+        return;
+    }
+
     const auto it = impl_->renderLayers.find(id);
     if (it == impl_->renderLayers.end()) {
         return;
@@ -505,7 +618,7 @@ void SceneController::removeLayer(const std::string &id) {
 }
 
 std::size_t SceneController::renderedLayerCount() const {
-    return impl_->renderLayers.size();
+    return impl_->renderLayers.size() + impl_->renderModelNodes.size();
 }
 
 void SceneController::resize(int /*width*/, int /*height*/) {
@@ -531,6 +644,12 @@ void SceneController::resize(int /*width*/, int /*height*/) {
 }
 
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
+    const auto modelIt = impl_->renderModelNodes.find(layer->id());
+    if (modelIt != impl_->renderModelNodes.end()) {
+        syncModelState(modelIt->second.get(), *layer);
+        return;
+    }
+
     const auto it = impl_->renderLayers.find(layer->id());
     if (it == impl_->renderLayers.end()) {
         return;
@@ -641,11 +760,15 @@ void SceneController::initializeDefaultScene(int width, int height) {
     impl_->map->addLayer(impl_->baseLayer.get());
 
     impl_->mapNode = new osgEarth::MapNode(impl_->map.get());
+    impl_->rootNode = new osg::Group();
+    impl_->modelRoot = new osg::Group();
+    impl_->rootNode->addChild(impl_->mapNode.get());
+    impl_->rootNode->addChild(impl_->modelRoot.get());
     impl_->viewer = new osgViewer::Viewer();
     impl_->viewer->setRealizeOperation(new osgEarth::GL3RealizeOperation());
     impl_->viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
     impl_->viewer->setCameraManipulator(new osgEarth::EarthManipulator());
-    impl_->viewer->setSceneData(impl_->mapNode.get());
+    impl_->viewer->setSceneData(impl_->rootNode.get());
 
     if (width > 0 && height > 0) {
         impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(

@@ -31,6 +31,9 @@ public:
     void setVectorMetadata(const VectorLayerInfo &meta);
     std::optional<VectorLayerInfo> vectorMetadata() const;
 
+    void setModelPlacement(const ModelPlacement &placement);
+    std::optional<ModelPlacement> modelPlacement() const;
+
     void setBandMapping(int redBand, int greenBand, int blueBand);
     int redBand() const;
     int greenBand() const;
@@ -46,6 +49,7 @@ private:
     std::optional<GeographicBounds> geographicBounds_;
     std::optional<RasterMetadata> rasterMetadata_;
     std::optional<VectorLayerInfo> vectorMetadata_;
+    std::optional<ModelPlacement> modelPlacement_;
     int redBand_ = 1;
     int greenBand_ = 2;
     int blueBand_ = 3;

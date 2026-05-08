@@ -65,6 +65,14 @@ std::optional<VectorLayerInfo> Layer::vectorMetadata() const {
     return vectorMetadata_;
 }
 
+void Layer::setModelPlacement(const ModelPlacement &placement) {
+    modelPlacement_ = placement;
+}
+
+std::optional<ModelPlacement> Layer::modelPlacement() const {
+    return modelPlacement_;
+}
+
 void Layer::setBandMapping(int redBand, int greenBand, int blueBand) {
     redBand_ = redBand;
     greenBand_ = greenBand;

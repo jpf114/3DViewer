@@ -10,8 +10,17 @@ enum class DataSourceKind {
     RasterImagery,
     RasterElevation,
     Vector,
+    Model,
     Chart,
     Scientific,
+};
+
+struct ModelPlacement {
+    double longitude = 0.0;
+    double latitude = 0.0;
+    double height = 0.0;
+    double scale = 1.0;
+    double heading = 0.0;
 };
 
 struct BandInfo {
@@ -59,4 +68,5 @@ struct DataSourceDescriptor {
     std::optional<GeographicBounds> geographicBounds;
     std::optional<RasterMetadata> rasterMetadata;
     std::optional<VectorLayerInfo> vectorMetadata;
+    std::optional<ModelPlacement> modelPlacement;
 };

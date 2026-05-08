@@ -91,6 +91,8 @@ void LayerTreeDock::addLayer(const std::string &id, const std::string &name, boo
         item->setIcon(0, icons.icon("mountains-regular.svg", 16, layerColor));
     } else if (kind == LayerKind::Vector) {
         item->setIcon(0, icons.icon("polygon-regular.svg", 16, layerColor));
+    } else if (kind == LayerKind::Model) {
+        item->setIcon(0, icons.icon("stack-regular.svg", 16, layerColor));
     }
 
     tree_->addTopLevelItem(item);

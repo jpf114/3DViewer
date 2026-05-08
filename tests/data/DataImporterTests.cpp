@@ -1,4 +1,6 @@
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 #include "data/DataImporter.h"
@@ -69,6 +71,22 @@ int main() {
     }
 
     if (!verifyKind(importer, DataSourceKind::Vector, LayerKind::Vector, "vector")) {
+        return EXIT_FAILURE;
+    }
+
+    if (!verifyKind(importer, DataSourceKind::Model, LayerKind::Model, "model")) {
+        return EXIT_FAILURE;
+    }
+
+    const std::filesystem::path modelPath = std::filesystem::temp_directory_path() / "threeviewer-model-test.glb";
+    {
+        std::ofstream modelFile(modelPath, std::ios::binary);
+        modelFile << "glb";
+    }
+    const auto modelLayer = importer.import(modelPath.string());
+    std::filesystem::remove(modelPath);
+    if (!modelLayer || modelLayer->kind() != LayerKind::Model) {
+        std::cerr << "Expected .glb path import to create a model layer.\n";
         return EXIT_FAILURE;
     }
 

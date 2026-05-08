@@ -10,6 +10,14 @@ struct BandMappingEntry {
     int blue = 3;
 };
 
+struct ModelPlacementEntry {
+    double longitude = 0.0;
+    double latitude = 0.0;
+    double height = 0.0;
+    double scale = 1.0;
+    double heading = 0.0;
+};
+
 struct LayerEntry {
     std::string id;
     std::string name;
@@ -19,6 +27,7 @@ struct LayerEntry {
     bool visible = true;
     double opacity = 1.0;
     std::optional<BandMappingEntry> bandMapping;
+    std::optional<ModelPlacementEntry> modelPlacement;
 };
 
 struct LayerConfig {

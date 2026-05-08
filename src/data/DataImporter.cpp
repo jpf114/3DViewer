@@ -1,19 +1,48 @@
 #include "data/DataImporter.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <memory>
 #include <spdlog/spdlog.h>
 
 #include "layers/ElevationLayer.h"
 #include "layers/ImageryLayer.h"
+#include "layers/ModelLayer.h"
 #include "layers/VectorLayer.h"
 
 namespace {
+
+std::optional<DataSourceDescriptor> inspectModelSource(const std::string &path) {
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) || ec) {
+        return std::nullopt;
+    }
+
+    const auto extension = std::filesystem::path(path).extension().string();
+    std::string lowerExtension = extension;
+    std::transform(lowerExtension.begin(), lowerExtension.end(), lowerExtension.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (lowerExtension != ".gltf" && lowerExtension != ".glb") {
+        return std::nullopt;
+    }
+
+    DataSourceDescriptor descriptor;
+    descriptor.id = path;
+    descriptor.name = std::filesystem::path(path).stem().string();
+    descriptor.path = path;
+    descriptor.kind = DataSourceKind::Model;
+    descriptor.modelPlacement = ModelPlacement{};
+    return descriptor;
+}
 
 bool isRenderableDataSourceKind(DataSourceKind kind) {
     switch (kind) {
     case DataSourceKind::RasterImagery:
     case DataSourceKind::RasterElevation:
     case DataSourceKind::Vector:
+    case DataSourceKind::Model:
         return true;
     case DataSourceKind::Chart:
     case DataSourceKind::Scientific:
@@ -31,6 +60,8 @@ const char *dataSourceKindName(DataSourceKind kind) {
         return "RasterElevation";
     case DataSourceKind::Vector:
         return "Vector";
+    case DataSourceKind::Model:
+        return "Model";
     case DataSourceKind::Chart:
         return "Chart";
     case DataSourceKind::Scientific:
@@ -43,6 +74,10 @@ const char *dataSourceKindName(DataSourceKind kind) {
 } // namespace
 
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
+    if (const auto modelDescriptor = inspectModelSource(path); modelDescriptor.has_value()) {
+        return import(*modelDescriptor);
+    }
+
     const auto descriptor = inspector_.inspect(path);
     if (!descriptor.has_value()) {
         spdlog::warn("DataImporter: failed to inspect path: {}", path);
@@ -70,6 +105,9 @@ std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descript
     case DataSourceKind::Vector:
         layer = std::make_shared<VectorLayer>(descriptor.id, descriptor.name, descriptor.path);
         break;
+    case DataSourceKind::Model:
+        layer = std::make_shared<ModelLayer>(descriptor.id, descriptor.name, descriptor.path);
+        break;
     case DataSourceKind::Chart:
     case DataSourceKind::Scientific:
         break;
@@ -85,6 +123,10 @@ std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descript
 
     if (layer && descriptor.vectorMetadata.has_value()) {
         layer->setVectorMetadata(*descriptor.vectorMetadata);
+    }
+
+    if (layer && descriptor.modelPlacement.has_value()) {
+        layer->setModelPlacement(*descriptor.modelPlacement);
     }
 
     return layer;
