@@ -27,6 +27,13 @@ QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
+QString compactMiddleText(const QString &text, int leading = 28, int trailing = 28) {
+    if (text.size() <= leading + trailing + 5) {
+        return text;
+    }
+    return text.left(leading) + " ... " + text.right(trailing);
+}
+
 int attributePriority(const QString &name) {
     const QString key = name.trimmed().toLower();
     if (key == "name" || key == "名称") return 0;
@@ -42,6 +49,20 @@ QLabel *makeValueLabel(const QString &text, QWidget *parent, bool wordWrap = fal
     label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     label->setCursor(Qt::IBeamCursor);
     return label;
+}
+
+QLabel *makeCompactValueLabel(const QString &text, QWidget *parent, bool wordWrap = false) {
+    auto *label = makeValueLabel(compactMiddleText(text), parent, wordWrap);
+    if (label->text() != text) {
+        label->setToolTip(text);
+    }
+    return label;
+}
+
+QTableWidgetItem *makeTableItem(const QString &text) {
+    auto *item = new QTableWidgetItem(text);
+    item->setToolTip(text);
+    return item;
 }
 
 } // namespace
@@ -207,8 +228,8 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
     pickTable_->setRowCount(sortedAttributes.size());
     for (int i = 0; i < sortedAttributes.size(); ++i) {
         const auto &[name, value] = sortedAttributes[i];
-        pickTable_->setItem(i, 0, new QTableWidgetItem(name));
-        pickTable_->setItem(i, 1, new QTableWidgetItem(value));
+        pickTable_->setItem(i, 0, makeTableItem(name));
+        pickTable_->setItem(i, 1, makeTableItem(value));
     }
     pickTable_->setVisible(!attributes.isEmpty());
 }
@@ -223,7 +244,7 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
     clearForm(basicForm_);
     basicForm_->addRow(u"名称:"_s, makeValueLabel(name, basicGroup_, true));
     basicForm_->addRow(u"类型:"_s, makeValueLabel(typeText, basicGroup_));
-    basicForm_->addRow(u"来源:"_s, makeValueLabel(source, basicGroup_, true));
+    basicForm_->addRow(u"来源:"_s, makeCompactValueLabel(source, basicGroup_, true));
     basicForm_->addRow(u"可见:"_s, makeValueLabel(visible ? u"是"_s : u"否"_s, basicGroup_));
     basicGroup_->setVisible(true);
     opacityWidget_->setVisible(true);
@@ -281,17 +302,17 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
         bandTable_->setRowCount(static_cast<int>(rasterMeta->bands.size()));
         for (int i = 0; i < static_cast<int>(rasterMeta->bands.size()); ++i) {
             const auto &band = rasterMeta->bands[i];
-            bandTable_->setItem(i, 0, new QTableWidgetItem(QString::number(band.index)));
-            bandTable_->setItem(i, 1, new QTableWidgetItem(utf8(band.dataType)));
+            bandTable_->setItem(i, 0, makeTableItem(QString::number(band.index)));
+            bandTable_->setItem(i, 1, makeTableItem(utf8(band.dataType)));
             if (band.hasMinMax) {
-                bandTable_->setItem(i, 2, new QTableWidgetItem(QString("[%1, %2]").arg(band.min, 0, 'f', 2).arg(band.max, 0, 'f', 2)));
+                bandTable_->setItem(i, 2, makeTableItem(QString("[%1, %2]").arg(band.min, 0, 'f', 2).arg(band.max, 0, 'f', 2)));
             } else {
-                bandTable_->setItem(i, 2, new QTableWidgetItem("-"));
+                bandTable_->setItem(i, 2, makeTableItem("-"));
             }
             if (band.hasNoDataValue) {
-                bandTable_->setItem(i, 3, new QTableWidgetItem(QString::number(band.noDataValue, 'f', 2)));
+                bandTable_->setItem(i, 3, makeTableItem(QString::number(band.noDataValue, 'f', 2)));
             } else {
-                bandTable_->setItem(i, 3, new QTableWidgetItem("-"));
+                bandTable_->setItem(i, 3, makeTableItem("-"));
             }
         }
         bandTable_->setVisible(!rasterMeta->bands.empty());
@@ -314,8 +335,8 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
         fieldTable_->setRowCount(static_cast<int>(vectorMeta->fields.size()));
         for (int i = 0; i < static_cast<int>(vectorMeta->fields.size()); ++i) {
             const auto &field = vectorMeta->fields[i];
-            fieldTable_->setItem(i, 0, new QTableWidgetItem(utf8(field.name)));
-            fieldTable_->setItem(i, 1, new QTableWidgetItem(utf8(field.typeName)));
+            fieldTable_->setItem(i, 0, makeTableItem(utf8(field.name)));
+            fieldTable_->setItem(i, 1, makeTableItem(utf8(field.typeName)));
         }
         fieldTable_->setVisible(!vectorMeta->fields.empty());
     } else {
