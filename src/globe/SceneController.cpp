@@ -13,6 +13,7 @@
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
 #include <osgEarth/Viewpoint>
+#include <osgEarth/FeatureDisplayLayout>
 #include <osgEarth/FeatureModelLayer>
 #include <osgEarth/Fill>
 #include <osgEarth/GLUtils>
@@ -49,6 +50,16 @@
 
 
 #include <osgEarth/Registry>
+#include <gdal_priv.h>
+#include <osgEarth/TMS>
+#include <osgEarth/WMS>
+#include <osgEarth/XYZ>
+#include <osgEarth/ArcGISServer>
+#include <osgEarth/Bing>
+#include <osgEarth/Profile>
+
+#include "data/BasemapUrlTemplate.h"
+#include "data/MapConfig.h"
 
 struct SceneController::Impl {
     bool initialized = false;
@@ -91,18 +102,98 @@ std::string escapeXml(const std::string &input) {
     return output;
 }
 
-osg::ref_ptr<osgEarth::ImageLayer> createBaseLayer() {
-    auto layer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
-    layer->setName("Natural Earth");
+osg::ref_ptr<osgEarth::ImageLayer> createBaseLayerFromConfig(const BasemapEntry &entry, const std::string &resourceDir) {
+    auto resolvePath = [&](const std::string &p) -> std::string {
+        if (p.empty()) return p;
+        if (p.size() >= 2 && p[1] == ':') return p;
+        if (p[0] == '/' || p[0] == '\\') return p;
+        return resourceDir + "/" + p;
+    };
 
-    const char *envDir = std::getenv(kResourceDirEnvVar);
-    if (envDir && envDir[0] != '\0') {
-        std::string path = std::string(envDir) + "/" + kDefaultBaseMapFilename;
-        layer->setURL(osgEarth::URI(path));
-    } else {
-        layer->setURL(osgEarth::URI(std::string(kDefaultResourceDir) + "/" + kDefaultBaseMapFilename));
+    auto resolveProfile = [](const std::string &profile) -> osg::ref_ptr<const osgEarth::Profile> {
+        if (profile == "spherical-mercator" || profile == "mercator") {
+            return osgEarth::Profile::create(osgEarth::Profile::SPHERICAL_MERCATOR);
+        }
+        if (profile == "geodetic" || profile == "wgs84") {
+            return osgEarth::Profile::create(osgEarth::Profile::GLOBAL_GEODETIC);
+        }
+        return nullptr;
+    };
+
+    switch (entry.type) {
+    case BasemapType::GDAL: {
+        auto layer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
+        layer->setName(entry.name);
+        layer->setURL(osgEarth::URI(resolvePath(entry.path)));
+        return layer;
+    }
+    case BasemapType::TMS: {
+        auto layer = osg::ref_ptr<osgEarth::TMSImageLayer>(new osgEarth::TMSImageLayer());
+        layer->setName(entry.name);
+        layer->setURL(osgEarth::URI(basemap::applyUrlTemplate(entry.url, entry.subdomains, entry.token)));
+        if (!entry.profile.empty()) {
+            auto p = resolveProfile(entry.profile);
+            if (p) {
+                osgEarth::ProfileOptions profileOpts;
+                if (entry.profile == "spherical-mercator" || entry.profile == "mercator") {
+                    profileOpts.namedProfile() = "spherical-mercator";
+                } else if (entry.profile == "geodetic" || entry.profile == "wgs84") {
+                    profileOpts.namedProfile() = "global-geodetic";
+                }
+                layer->options().profile() = profileOpts;
+            }
+        }
+        return layer;
+    }
+    case BasemapType::WMS: {
+        auto layer = osg::ref_ptr<osgEarth::WMSImageLayer>(new osgEarth::WMSImageLayer());
+        layer->setName(entry.name);
+        layer->setURL(osgEarth::URI(basemap::applyUrlTemplate(entry.url, entry.subdomains, entry.token)));
+        if (!entry.wmsLayers.empty()) layer->setLayers(entry.wmsLayers);
+        if (!entry.wmsStyle.empty()) layer->setStyle(entry.wmsStyle);
+        if (!entry.wmsFormat.empty()) layer->setFormat(entry.wmsFormat);
+        if (!entry.wmsSrs.empty()) layer->setSRS(entry.wmsSrs);
+        layer->setTransparent(entry.wmsTransparent);
+        return layer;
+    }
+    case BasemapType::XYZ: {
+        auto layer = osg::ref_ptr<osgEarth::XYZImageLayer>(new osgEarth::XYZImageLayer());
+        layer->setName(entry.name);
+        layer->setURL(osgEarth::URI(basemap::applyUrlTemplate(entry.url, entry.subdomains, entry.token)));
+        if (!entry.profile.empty()) {
+            auto p = resolveProfile(entry.profile);
+            if (p) layer->setProfile(p);
+        }
+        return layer;
+    }
+    case BasemapType::ArcGIS: {
+        auto layer = osg::ref_ptr<osgEarth::ArcGISServerImageLayer>(new osgEarth::ArcGISServerImageLayer());
+        layer->setName(entry.name);
+        layer->setURL(osgEarth::URI(basemap::applyUrlTemplate(entry.url, entry.subdomains, entry.token)));
+        if (!entry.token.empty()) layer->setToken(entry.token);
+        return layer;
+    }
+    case BasemapType::Bing: {
+        auto layer = osg::ref_ptr<osgEarth::BingImageLayer>(new osgEarth::BingImageLayer());
+        layer->setName(entry.name);
+        if (!entry.bingKey.empty()) layer->setAPIKey(entry.bingKey);
+        if (!entry.bingImagerySet.empty()) layer->setImagerySet(entry.bingImagerySet);
+        return layer;
+    }
     }
 
+    return nullptr;
+}
+
+osg::ref_ptr<osgEarth::ImageLayer> createFallbackBaseLayer(const std::string &resourceDir) {
+    auto layer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
+    layer->setName("Natural Earth");
+    const char *envDir = std::getenv(kResourceDirEnvVar);
+    if (envDir && envDir[0] != '\0') {
+        layer->setURL(osgEarth::URI(std::string(envDir) + "/" + kDefaultBaseMapFilename));
+    } else {
+        layer->setURL(osgEarth::URI(resourceDir + "/" + kDefaultBaseMapFilename));
+    }
     return layer;
 }
 
@@ -149,10 +240,15 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         styleSheet->addStyle(lineStyle);
         styleSheet->addStyle(polygonStyle);
 
+        osgEarth::FeatureDisplayLayout layout;
+        layout.tileSizeFactor() = 15.0f;
+        layout.addLevel(osgEarth::FeatureLevel(0.0f, 1.0e7f));
+
         auto featureLayer = osg::ref_ptr<osgEarth::FeatureModelLayer>(new osgEarth::FeatureModelLayer());
         featureLayer->setName(layer.name());
         featureLayer->setFeatureSource(featureSource.get());
         featureLayer->setStyleSheet(styleSheet.get());
+        featureLayer->setLayout(layout);
         return featureLayer;
     }
     case LayerKind::Chart:
@@ -201,14 +297,24 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
         return;
     }
 
+    spdlog::info("SceneController: creating scene layer for '{}' kind={}", layer->id(), static_cast<int>(layer->kind()));
+
     auto sceneLayer = createSceneLayer(*layer);
     if (!sceneLayer) {
         spdlog::warn("SceneController: unsupported layer kind for '{}'", layer->id());
         return;
     }
 
+    spdlog::info("SceneController: adding layer '{}' to map", layer->id());
+
     syncVisibleState(sceneLayer.get(), *layer);
-    impl_->map->addLayer(sceneLayer.get());
+    try {
+        impl_->map->addLayer(sceneLayer.get());
+    } catch (const std::exception &e) {
+        spdlog::error("SceneController: exception adding layer '{}': {}", layer->id(), e.what());
+        return;
+    }
+
     impl_->renderLayers[layer->id()] = sceneLayer;
     spdlog::info("SceneController: added layer '{}' to scene", layer->id());
 }
@@ -480,7 +586,11 @@ void SceneController::initializeDefaultScene(int width, int height) {
     }
 
     impl_->map = new osgEarth::Map();
-    impl_->baseLayer = createBaseLayer();
+    if (!impl_->baseLayer) {
+        const char *envDir = std::getenv(kResourceDirEnvVar);
+        std::string resourceDir = (envDir && envDir[0] != '\0') ? std::string(envDir) : std::string(kDefaultResourceDir);
+        impl_->baseLayer = createFallbackBaseLayer(resourceDir);
+    }
     impl_->map->addLayer(impl_->baseLayer.get());
 
     impl_->mapNode = new osgEarth::MapNode(impl_->map.get());
@@ -499,6 +609,8 @@ void SceneController::initializeDefaultScene(int width, int height) {
     }
 
     impl_->initialized = true;
+    CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+    CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
     spdlog::info("SceneController: default scene initialized (graphics window deferred)");
     flushPendingLayers();
 }
@@ -644,4 +756,21 @@ QImage SceneController::captureImage() {
     }
 
     return QImage();
+}
+
+void SceneController::setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir) {
+    for (const auto &entry : config.basemaps) {
+        if (!entry.enabled) continue;
+
+        spdlog::info("SceneController: trying basemap '{}' type={}", entry.id, static_cast<int>(entry.type));
+        auto layer = createBaseLayerFromConfig(entry, resourceDir);
+        if (layer) {
+            impl_->baseLayer = layer;
+            spdlog::info("SceneController: basemap '{}' selected", entry.id);
+            return;
+        }
+    }
+
+    spdlog::info("SceneController: no enabled basemap found, using fallback");
+    impl_->baseLayer = createFallbackBaseLayer(resourceDir);
 }

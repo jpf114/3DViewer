@@ -48,6 +48,8 @@ add_executable(ThreeDViewer
     src/common/Logging.cpp
     src/data/DataImporter.cpp
     src/data/GdalDatasetInspector.cpp
+    src/data/LayerConfig.cpp
+    src/data/MapConfig.cpp
     src/globe/GlobeWidget.cpp
     src/globe/SceneController.cpp
     src/layers/Layer.cpp
@@ -129,6 +131,7 @@ if(WIN32)
         FILES_MATCHING PATTERN "*.tif" PATTERN "*.prj" PATTERN "*.tfw"
                        PATTERN "*.shp" PATTERN "*.shx" PATTERN "*.dbf"
                        PATTERN "*.prj" PATTERN "*.cpg" PATTERN "*.geojson"
+                       PATTERN "*.json"
     )
 
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/"

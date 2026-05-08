@@ -1,5 +1,6 @@
 #include "app/ApplicationController.h"
 
+#include <QCoreApplication>
 #include <QFileDialog>
 #include <QImage>
 #include <QMessageBox>
@@ -17,8 +18,10 @@
 using namespace Qt::Literals::StringLiterals;
 
 #include "app/MainWindow.h"
-#include "globe/GlobeWidget.h"
 #include "data/DataImporter.h"
+#include "data/MapConfig.h"
+#include "data/LayerConfig.h"
+#include "globe/GlobeWidget.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
 #include "layers/LayerManager.h"
@@ -316,4 +319,88 @@ void ApplicationController::addToRecentFiles(const QString &path) {
 
     settings.setValue(kRecentFilesKey, recent);
     window_.setRecentFiles(recent);
+}
+
+void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir) {
+    auto basemapConfig = loadBasemapConfig(resourceDir);
+    if (basemapConfig.has_value()) {
+        sceneController_.setBasemapConfig(*basemapConfig, resourceDir);
+    }
+
+    auto layerConfig = loadLayerConfig(resourceDir);
+    if (!layerConfig.has_value()) {
+        return;
+    }
+
+    for (const auto &entry : layerConfig->layers) {
+        if (!entry.autoload) continue;
+
+        std::string resolvedPath = entry.path;
+        if (!resolvedPath.empty() && !(resolvedPath.size() >= 2 && resolvedPath[1] == ':') && resolvedPath[0] != '/' && resolvedPath[0] != '\\') {
+            resolvedPath = resourceDir + "/" + resolvedPath;
+        }
+
+        spdlog::info("ApplicationController: loading persisted layer '{}' from '{}'", entry.id, resolvedPath);
+
+        const auto layer = importer_.import(resolvedPath);
+        if (!layer) {
+            spdlog::warn("ApplicationController: failed to load persisted layer '{}'", entry.id);
+            window_.statusBar()->showMessage(
+                QString(u"无法加载持久化图层：%1"_s).arg(QString::fromStdString(entry.name)), 5000);
+            continue;
+        }
+
+        if (!layerManager_.addLayer(layer)) {
+            spdlog::warn("ApplicationController: duplicate persisted layer '{}'", entry.id);
+            continue;
+        }
+
+        layer->setVisible(entry.visible);
+        layer->setOpacity(entry.opacity);
+        if (entry.bandMapping.has_value() && layer->kind() == LayerKind::Imagery) {
+            layer->setBandMapping(entry.bandMapping->red, entry.bandMapping->green, entry.bandMapping->blue);
+        }
+
+        sceneController_.addLayer(layer);
+        window_.addLayerRow(*layer);
+        spdlog::info("ApplicationController: persisted layer '{}' loaded", layer->id());
+    }
+}
+
+void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir) {
+    LayerConfig config;
+    const auto &layers = layerManager_.layers();
+
+    for (const auto &layer : layers) {
+        LayerEntry entry;
+        entry.id = layer->id();
+        entry.name = layer->name();
+        entry.path = layer->sourceUri();
+        entry.autoload = true;
+        entry.visible = layer->visible();
+        entry.opacity = layer->opacity();
+
+        switch (layer->kind()) {
+        case LayerKind::Imagery: entry.kind = "imagery"; break;
+        case LayerKind::Elevation: entry.kind = "elevation"; break;
+        case LayerKind::Vector: entry.kind = "vector"; break;
+        case LayerKind::Chart: entry.kind = "chart"; break;
+        case LayerKind::Scientific: entry.kind = "scientific"; break;
+        }
+
+        if (layer->kind() == LayerKind::Imagery) {
+            const auto rm = layer->rasterMetadata();
+            if (rm.has_value() && rm->bandCount >= 2) {
+                BandMappingEntry bm;
+                bm.red = layer->redBand();
+                bm.green = layer->greenBand();
+                bm.blue = layer->blueBand();
+                entry.bandMapping = bm;
+            }
+        }
+
+        config.layers.push_back(entry);
+    }
+
+    saveLayerConfig(resourceDir, config);
 }

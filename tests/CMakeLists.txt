@@ -13,7 +13,7 @@ add_executable(ApplicationSmokeTests
 )
 
 target_include_directories(ApplicationSmokeTests PRIVATE ../src)
-target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg osgEarth::osgEarth spdlog::spdlog)
+target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg osgEarth::osgEarth GDAL::GDAL spdlog::spdlog)
 
 add_test(NAME ApplicationSmokeTests COMMAND ApplicationSmokeTests)
 
@@ -24,9 +24,18 @@ add_executable(SceneControllerTests
 )
 
 target_include_directories(SceneControllerTests PRIVATE ../src)
-target_link_libraries(SceneControllerTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets osgEarth::osgEarth spdlog::spdlog)
+target_link_libraries(SceneControllerTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets osgEarth::osgEarth GDAL::GDAL spdlog::spdlog)
 
 add_test(NAME SceneControllerTests COMMAND SceneControllerTests)
+
+add_executable(InputMappingTests
+    globe/InputMappingTests.cpp
+)
+
+target_include_directories(InputMappingTests PRIVATE ../src)
+target_link_libraries(InputMappingTests PRIVATE Qt6::Core)
+
+add_test(NAME InputMappingTests COMMAND InputMappingTests)
 
 add_executable(LayerManagerTests
     layers/LayerManagerTests.cpp
@@ -48,6 +57,28 @@ target_include_directories(GdalDatasetInspectorTests PRIVATE ../src)
 target_link_libraries(GdalDatasetInspectorTests PRIVATE GDAL::GDAL spdlog::spdlog)
 
 add_test(NAME GdalDatasetInspectorTests COMMAND GdalDatasetInspectorTests)
+
+add_executable(MapConfigTests
+    data/MapConfigTests.cpp
+    ../src/data/MapConfig.cpp
+)
+
+target_compile_options(MapConfigTests PRIVATE /utf-8)
+target_include_directories(MapConfigTests PRIVATE ../src)
+target_link_libraries(MapConfigTests PRIVATE Qt6::Core spdlog::spdlog)
+
+add_test(NAME MapConfigTests COMMAND MapConfigTests)
+
+add_executable(LayerConfigTests
+    data/LayerConfigTests.cpp
+    ../src/data/LayerConfig.cpp
+)
+
+target_compile_options(LayerConfigTests PRIVATE /utf-8)
+target_include_directories(LayerConfigTests PRIVATE ../src)
+target_link_libraries(LayerConfigTests PRIVATE Qt6::Core spdlog::spdlog)
+
+add_test(NAME LayerConfigTests COMMAND LayerConfigTests)
 
 add_executable(DataImporterTests
     data/DataImporterTests.cpp

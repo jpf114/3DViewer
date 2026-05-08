@@ -11,6 +11,7 @@
 using namespace Qt::Literals::StringLiterals;
 
 #include "globe/PickResult.h"
+#include "globe/InputMapping.h"
 #include "tools/ToolManager.h"
 
 namespace {
@@ -20,6 +21,13 @@ unsigned int mapQtButton(Qt::MouseButton button) {
     if (button == Qt::MiddleButton) return 2;
     if (button == Qt::RightButton) return 3;
     return 0;
+}
+
+QSize pixelSceneSize(const QWidget &widget) {
+    const qreal dpr = widget.devicePixelRatioF();
+    const int pixelWidth = (std::max)(1, static_cast<int>(std::lround(widget.width() * dpr)));
+    const int pixelHeight = (std::max)(1, static_cast<int>(std::lround(widget.height() * dpr)));
+    return QSize(pixelWidth, pixelHeight);
 }
 
 }
@@ -53,14 +61,15 @@ ToolManager &GlobeWidget::toolManager() {
 }
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
-    const float fx = static_cast<float>(event->position().x());
-    const float fy = static_cast<float>(event->position().y());
-    sceneController_.mouseMove(fx, fy);
+    const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
+    sceneController_.mouseMove(static_cast<float>(scenePos.x()), static_cast<float>(scenePos.y()));
 
-    lastPickX_ = static_cast<int>(fx);
-    lastPickY_ = static_cast<int>(fy);
-    if (!pickTimer_->isActive()) {
+    if (globe::shouldScheduleHoverPick(event->buttons(), toolManager().activeToolId())) {
+        lastPickX_ = static_cast<int>(std::lround(scenePos.x()));
+        lastPickY_ = static_cast<int>(std::lround(scenePos.y()));
         pickTimer_->start();
+    } else if (pickTimer_->isActive()) {
+        pickTimer_->stop();
     }
 
     toolManager().mouseMoveEvent(*this, event);
@@ -70,11 +79,13 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
 void GlobeWidget::mousePressEvent(QMouseEvent *event) {
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
+        const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
         sceneController_.mousePress(
-            static_cast<float>(event->position().x()),
-            static_cast<float>(event->position().y()),
+            static_cast<float>(scenePos.x()),
+            static_cast<float>(scenePos.y()),
             button);
     }
+    pickTimer_->stop();
     toolManager().mousePressEvent(*this, event);
     QWidget::mousePressEvent(event);
 }
@@ -82,12 +93,18 @@ void GlobeWidget::mousePressEvent(QMouseEvent *event) {
 void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
+        const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
         sceneController_.mouseRelease(
-            static_cast<float>(event->position().x()),
-            static_cast<float>(event->position().y()),
+            static_cast<float>(scenePos.x()),
+            static_cast<float>(scenePos.y()),
             button);
+        lastPickX_ = static_cast<int>(std::lround(scenePos.x()));
+        lastPickY_ = static_cast<int>(std::lround(scenePos.y()));
     }
     toolManager().mouseReleaseEvent(*this, event);
+    if (globe::shouldScheduleHoverPick(event->buttons(), toolManager().activeToolId())) {
+        pickTimer_->start();
+    }
     QWidget::mouseReleaseEvent(event);
 }
 

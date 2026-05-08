@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QFile>
+#include <QCoreApplication>
 #include <QString>
 #include <stdexcept>
 #include <string>
@@ -36,6 +37,9 @@ static void seTranslator(unsigned int code, EXCEPTION_POINTERS * /*ep*/) {
 }
 
 static void setupWindowsRuntimeEnvironment() {
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
         qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("windows"));
     }
@@ -98,7 +102,18 @@ int main(int argc, char *argv[]) {
     LayerManager layerManager;
     DataImporter importer;
     ApplicationController controller(window, window.globeWidget()->sceneController(), layerManager, importer);
-    Q_UNUSED(controller);
+
+    const QByteArray envDir = qgetenv("THREEDVIEWER_RESOURCE_DIR");
+    const std::string resourceDir = (!envDir.isEmpty())
+        ? std::string(envDir.constData(), static_cast<size_t>(envDir.size()))
+        : QCoreApplication::applicationDirPath().toStdString() + "/data";
+
+    controller.loadBasemapAndLayers(resourceDir);
+
+    QObject::connect(&window, &MainWindow::saveAndExitRequested, &window, [&controller, &resourceDir]() {
+        controller.saveLayerConfigOnExit(resourceDir);
+    });
+
     window.show();
 
     return app.exec();

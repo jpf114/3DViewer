@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <optional>
 
+class QCloseEvent;
 struct RasterMetadata;
 struct VectorLayerInfo;
 
@@ -44,11 +45,13 @@ signals:
     void resetViewRequested();
     void zoomToLayerRequested(const QString &layerId);
     void screenshotRequested();
+    void saveAndExitRequested();
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     void updateRecentMenu();

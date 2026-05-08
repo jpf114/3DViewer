@@ -11,6 +11,7 @@
 #include "layers/GeographicBounds.h"
 #include "layers/Layer.h"
 
+struct BasemapConfig;
 struct PickResult;
 
 class SceneController {
@@ -46,6 +47,7 @@ public:
     void reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder);
     void resetView();
     QImage captureImage();
+    void setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir);
 
 private:
     void flushPendingLayers();

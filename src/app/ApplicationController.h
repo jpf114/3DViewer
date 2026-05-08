@@ -26,6 +26,8 @@ public:
     void zoomToLayer(const std::string &layerId);
     void resetView();
     void captureScreenshot();
+    void loadBasemapAndLayers(const std::string &resourceDir);
+    void saveLayerConfigOnExit(const std::string &resourceDir);
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
