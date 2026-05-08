@@ -26,6 +26,14 @@ QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
+QLabel *makeValueLabel(const QString &text, QWidget *parent, bool wordWrap = false) {
+    auto *label = new QLabel(text, parent);
+    label->setWordWrap(wordWrap);
+    label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    label->setCursor(Qt::IBeamCursor);
+    return label;
+}
+
 } // namespace
 
 PropertyDock::PropertyDock(QWidget *parent)
@@ -75,8 +83,8 @@ void PropertyDock::setupUi() {
     basicGroup_->setVisible(false);
     layout->addWidget(basicGroup_);
 
-    auto *opacityWidget = new QWidget(propertiesWidget_);
-    auto *opacityLayout = new QHBoxLayout(opacityWidget);
+    opacityWidget_ = new QWidget(propertiesWidget_);
+    auto *opacityLayout = new QHBoxLayout(opacityWidget_);
     opacityLayout->setContentsMargins(0, 0, 0, 0);
     opacitySlider_ = new QSlider(Qt::Horizontal, propertiesWidget_);
     opacitySlider_->setRange(0, 100);
@@ -87,7 +95,8 @@ void PropertyDock::setupUi() {
     opacityLabel_->setMinimumWidth(36);
     opacityLayout->addWidget(opacitySlider_);
     opacityLayout->addWidget(opacityLabel_);
-    layout->addWidget(opacityWidget);
+    opacityWidget_->setVisible(false);
+    layout->addWidget(opacityWidget_);
 
     bandLabel_ = new QLabel(u"波段组合"_s, propertiesWidget_);
     layout->addWidget(bandLabel_);
@@ -155,7 +164,7 @@ void PropertyDock::showText(const QString &text) {
 
 void PropertyDock::showPickDetails(const QStringList &summaryLines,
                                    const QList<std::pair<QString, QString>> &attributes) {
-    text_->clear();
+    text_->setPlainText(u"当前显示拾取结果。"_s);
     clearInspection();
 
     for (const QString &line : summaryLines) {
@@ -169,11 +178,12 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
 
         const QString label = line.left(separator + 1);
         const QString value = line.mid(separator + 1).trimmed();
-        pickForm_->addRow(label, new QLabel(value, pickGroup_));
+        pickForm_->addRow(label, makeValueLabel(value, pickGroup_, true));
     }
 
     pickGroup_->setVisible(pickForm_->rowCount() > 0);
 
+    pickTable_->clearContents();
     pickTable_->setRowCount(attributes.size());
     for (int i = 0; i < attributes.size(); ++i) {
         const auto &[name, value] = attributes[i];
@@ -188,13 +198,15 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
                                        const std::optional<RasterMetadata> &rasterMeta,
                                        const std::optional<VectorLayerInfo> &vectorMeta) {
     currentLayerId_ = layerId;
+    text_->setPlainText(u"当前显示选中图层属性。"_s);
 
     clearForm(basicForm_);
-    basicForm_->addRow(u"名称:"_s, new QLabel(name));
-    basicForm_->addRow(u"类型:"_s, new QLabel(typeText));
-    basicForm_->addRow(u"来源:"_s, new QLabel(source));
-    basicForm_->addRow(u"可见:"_s, new QLabel(visible ? u"是"_s : u"否"_s));
+    basicForm_->addRow(u"名称:"_s, makeValueLabel(name, basicGroup_, true));
+    basicForm_->addRow(u"类型:"_s, makeValueLabel(typeText, basicGroup_));
+    basicForm_->addRow(u"来源:"_s, makeValueLabel(source, basicGroup_, true));
+    basicForm_->addRow(u"可见:"_s, makeValueLabel(visible ? u"是"_s : u"否"_s, basicGroup_));
     basicGroup_->setVisible(true);
+    opacityWidget_->setVisible(true);
 
     opacitySlider_->blockSignals(true);
     opacitySlider_->setValue(static_cast<int>(opacity * 100.0 + 0.5));
@@ -228,16 +240,20 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
 
     if (rasterMeta.has_value()) {
         clearForm(rasterForm_);
-        rasterForm_->addRow(u"驱动:"_s, new QLabel(utf8(rasterMeta->driverName)));
-        rasterForm_->addRow(u"尺寸:"_s, new QLabel(QString("%1 x %2").arg(rasterMeta->rasterXSize).arg(rasterMeta->rasterYSize)));
-        rasterForm_->addRow(u"波段数:"_s, new QLabel(QString::number(rasterMeta->bandCount)));
+        rasterForm_->addRow(u"驱动:"_s, makeValueLabel(utf8(rasterMeta->driverName), rasterGroup_));
+        rasterForm_->addRow(
+            u"尺寸:"_s,
+            makeValueLabel(QString("%1 x %2").arg(rasterMeta->rasterXSize).arg(rasterMeta->rasterYSize), rasterGroup_));
+        rasterForm_->addRow(u"波段数:"_s, makeValueLabel(QString::number(rasterMeta->bandCount), rasterGroup_));
         if (!rasterMeta->epsgCode.empty()) {
-            rasterForm_->addRow(u"坐标系:"_s, new QLabel(utf8(rasterMeta->epsgCode)));
+            rasterForm_->addRow(u"坐标系:"_s, makeValueLabel(utf8(rasterMeta->epsgCode), rasterGroup_, true));
         }
         if (rasterMeta->pixelSizeX > 0 || rasterMeta->pixelSizeY > 0) {
             rasterForm_->addRow(
                 u"像素大小:"_s,
-                new QLabel(QString("%1 x %2").arg(rasterMeta->pixelSizeX, 0, 'f', 6).arg(rasterMeta->pixelSizeY, 0, 'f', 6)));
+                makeValueLabel(
+                    QString("%1 x %2").arg(rasterMeta->pixelSizeX, 0, 'f', 6).arg(rasterMeta->pixelSizeY, 0, 'f', 6),
+                    rasterGroup_));
         }
         rasterGroup_->setVisible(true);
 
@@ -266,11 +282,11 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
 
     if (vectorMeta.has_value()) {
         clearForm(vectorForm_);
-        vectorForm_->addRow(u"图层:"_s, new QLabel(utf8(vectorMeta->name)));
-        vectorForm_->addRow(u"几何类型:"_s, new QLabel(utf8(vectorMeta->geometryType)));
-        vectorForm_->addRow(u"要素数:"_s, new QLabel(QString::number(vectorMeta->featureCount)));
+        vectorForm_->addRow(u"图层:"_s, makeValueLabel(utf8(vectorMeta->name), vectorGroup_, true));
+        vectorForm_->addRow(u"几何类型:"_s, makeValueLabel(utf8(vectorMeta->geometryType), vectorGroup_));
+        vectorForm_->addRow(u"要素数:"_s, makeValueLabel(QString::number(vectorMeta->featureCount), vectorGroup_));
         if (!vectorMeta->epsgCode.empty()) {
-            vectorForm_->addRow(u"坐标系:"_s, new QLabel(utf8(vectorMeta->epsgCode)));
+            vectorForm_->addRow(u"坐标系:"_s, makeValueLabel(utf8(vectorMeta->epsgCode), vectorGroup_, true));
         }
         vectorGroup_->setVisible(true);
 
@@ -291,10 +307,12 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
 void PropertyDock::clearLayerProperties() {
     currentLayerId_.clear();
     currentBandCount_ = 0;
+    text_->setPlainText(u"未选择图层。"_s);
     opacitySlider_->blockSignals(true);
     opacitySlider_->setValue(100);
     opacitySlider_->blockSignals(false);
     opacityLabel_->setText("1.00");
+    opacityWidget_->setVisible(false);
     bandCombo_->setVisible(false);
     bandLabel_->setVisible(false);
     basicGroup_->setVisible(false);

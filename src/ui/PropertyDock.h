@@ -15,6 +15,7 @@ class QGroupBox;
 class QFormLayout;
 class QTableWidget;
 class QTextEdit;
+class QWidget;
 
 class PropertyDock : public QDockWidget {
     Q_OBJECT
@@ -42,6 +43,7 @@ private:
     void onBandComboChanged(int index);
 
     QTextEdit *text_;
+    QWidget *opacityWidget_;
     QSlider *opacitySlider_;
     QLabel *opacityLabel_;
     QComboBox *bandCombo_;
