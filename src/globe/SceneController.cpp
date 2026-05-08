@@ -67,6 +67,7 @@ struct SceneController::Impl {
     HWND hwnd = nullptr;
     std::unordered_map<std::string, std::shared_ptr<Layer>> appLayers;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
+    std::vector<std::string> orderedLayerIds;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
@@ -289,6 +290,9 @@ SceneController &SceneController::operator=(SceneController &&) noexcept = defau
 
 void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     impl_->appLayers[layer->id()] = layer;
+    if (std::find(impl_->orderedLayerIds.begin(), impl_->orderedLayerIds.end(), layer->id()) == impl_->orderedLayerIds.end()) {
+        impl_->orderedLayerIds.push_back(layer->id());
+    }
 
     if (impl_->renderLayers.contains(layer->id())) {
         spdlog::warn("SceneController: layer '{}' already in scene, skipping", layer->id());
@@ -324,6 +328,14 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
 }
 
 void SceneController::reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder) {
+    impl_->orderedLayerIds.clear();
+    impl_->orderedLayerIds.reserve(userLayersInOrder.size());
+    for (const auto &userLayer : userLayersInOrder) {
+        if (userLayer) {
+            impl_->orderedLayerIds.push_back(userLayer->id());
+        }
+    }
+
     if (!impl_->map) {
         return;
     }
@@ -436,13 +448,18 @@ PickResult SceneController::pickAt(int x, int y) const {
     result.latitude = point.y();
     result.elevation = point.z();
 
-    for (const auto &[id, sceneLayer] : impl_->renderLayers) {
-        auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer.get());
+    for (auto it = impl_->orderedLayerIds.rbegin(); it != impl_->orderedLayerIds.rend(); ++it) {
+        const auto renderLayerIt = impl_->renderLayers.find(*it);
+        if (renderLayerIt == impl_->renderLayers.end()) {
+            continue;
+        }
+
+        auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(renderLayerIt->second.get());
         if (!visibleLayer || !visibleLayer->getVisible()) {
             continue;
         }
 
-        const auto appLayerIt = impl_->appLayers.find(id);
+        const auto appLayerIt = impl_->appLayers.find(*it);
         if (appLayerIt == impl_->appLayers.end()) {
             continue;
         }
@@ -457,7 +474,7 @@ PickResult SceneController::pickAt(int x, int y) const {
             continue;
         }
 
-        result.layerId = id;
+        result.layerId = *it;
         result.displayText = hit->displayText.empty() ? appLayer->name() : hit->displayText;
         result.featureAttributes.clear();
         result.featureAttributes.reserve(hit->attributes.size());
@@ -472,6 +489,9 @@ PickResult SceneController::pickAt(int x, int y) const {
 
 void SceneController::removeLayer(const std::string &id) {
     impl_->appLayers.erase(id);
+    impl_->orderedLayerIds.erase(
+        std::remove(impl_->orderedLayerIds.begin(), impl_->orderedLayerIds.end(), id),
+        impl_->orderedLayerIds.end());
     const auto it = impl_->renderLayers.find(id);
     if (it == impl_->renderLayers.end()) {
         return;

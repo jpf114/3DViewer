@@ -20,6 +20,7 @@ add_test(NAME ApplicationSmokeTests COMMAND ApplicationSmokeTests)
 add_executable(SceneControllerTests
     globe/SceneControllerTests.cpp
     ../src/globe/SceneController.cpp
+    ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
 )
 
