@@ -56,6 +56,7 @@ add_executable(GdalDatasetInspectorTests
 target_compile_options(GdalDatasetInspectorTests PRIVATE /utf-8)
 target_include_directories(GdalDatasetInspectorTests PRIVATE ../src)
 target_link_libraries(GdalDatasetInspectorTests PRIVATE GDAL::GDAL spdlog::spdlog)
+threeviewer_runtime_post_build(GdalDatasetInspectorTests)
 
 add_test(NAME GdalDatasetInspectorTests COMMAND GdalDatasetInspectorTests)
 
@@ -102,5 +103,6 @@ add_executable(VectorFeatureQueryTests
 target_compile_options(VectorFeatureQueryTests PRIVATE /utf-8)
 target_include_directories(VectorFeatureQueryTests PRIVATE ../src)
 target_link_libraries(VectorFeatureQueryTests PRIVATE Qt6::Core GDAL::GDAL spdlog::spdlog)
+threeviewer_runtime_post_build(VectorFeatureQueryTests)
 
 add_test(NAME VectorFeatureQueryTests COMMAND VectorFeatureQueryTests)

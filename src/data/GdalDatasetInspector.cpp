@@ -2,11 +2,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <limits>
 #include <mutex>
 #include <spdlog/spdlog.h>
+
+#if defined(Q_OS_WIN)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
 
 #include <gdal_priv.h>
 #include <cpl_conv.h>
@@ -15,15 +22,97 @@
 
 namespace {
 
+void appendModuleShareRoot(std::vector<std::filesystem::path> &candidateRoots, const wchar_t *moduleName) {
+#if defined(Q_OS_WIN)
+    if (HMODULE module = GetModuleHandleW(moduleName)) {
+        wchar_t modulePath[MAX_PATH];
+        const DWORD length = GetModuleFileNameW(module, modulePath, MAX_PATH);
+        if (length > 0 && length < MAX_PATH) {
+            candidateRoots.push_back(std::filesystem::path(modulePath).parent_path().parent_path() / "share");
+        }
+    }
+#else
+    (void)candidateRoots;
+    (void)moduleName;
+#endif
+}
+
+void configureRuntimeDataPaths() {
+#if defined(Q_OS_WIN)
+    if (CPLGetConfigOption("GDAL_DATA", nullptr) != nullptr &&
+        (CPLGetConfigOption("PROJ_DATA", nullptr) != nullptr ||
+         CPLGetConfigOption("PROJ_LIB", nullptr) != nullptr)) {
+        return;
+    }
+
+    std::vector<std::filesystem::path> candidateRoots;
+    wchar_t modulePath[MAX_PATH];
+    const DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    if (length > 0 && length < MAX_PATH) {
+        candidateRoots.push_back(std::filesystem::path(modulePath).parent_path() / "share");
+    }
+
+    appendModuleShareRoot(candidateRoots, L"gdal.dll");
+    appendModuleShareRoot(candidateRoots, L"gdald.dll");
+    appendModuleShareRoot(candidateRoots, L"proj_9.dll");
+    appendModuleShareRoot(candidateRoots, L"proj_9_d.dll");
+
+    if (const char *vcpkgRoot = std::getenv("VCPKG_ROOT")) {
+        candidateRoots.emplace_back(std::filesystem::path(vcpkgRoot) / "installed" / "x64-windows" / "share");
+    }
+
+    for (const auto &shareDir : candidateRoots) {
+        const std::filesystem::path gdalDir = shareDir / "gdal";
+        const std::filesystem::path projDir = shareDir / "proj";
+
+        if (CPLGetConfigOption("GDAL_DATA", nullptr) == nullptr && std::filesystem::exists(gdalDir)) {
+            const std::string path = gdalDir.string();
+            CPLSetConfigOption("GDAL_DATA", path.c_str());
+        }
+
+        if (std::filesystem::exists(projDir)) {
+            const std::string path = projDir.string();
+            if (CPLGetConfigOption("PROJ_DATA", nullptr) == nullptr) {
+                CPLSetConfigOption("PROJ_DATA", path.c_str());
+            }
+            if (CPLGetConfigOption("PROJ_LIB", nullptr) == nullptr) {
+                CPLSetConfigOption("PROJ_LIB", path.c_str());
+            }
+        }
+    }
+#endif
+}
+
 void ensureGdalRegistered() {
     static std::once_flag once;
     std::call_once(once, []() {
-        CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+        configureRuntimeDataPaths();
         GDALAllRegister();
     });
+    CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+    CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
 }
 
 std::string stemOrFilename(const std::string &path) {
+#if defined(Q_OS_WIN)
+    try {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+        if (wlen > 0) {
+            std::wstring wpath(wlen - 1, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
+            auto fsPath = std::filesystem::path(wpath);
+            auto wstem = fsPath.stem().wstring();
+            if (!wstem.empty()) {
+                int mlen = WideCharToMultiByte(CP_UTF8, 0, wstem.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                if (mlen > 0) {
+                    std::string result(mlen - 1, '\0');
+                    WideCharToMultiByte(CP_UTF8, 0, wstem.c_str(), -1, result.data(), mlen, nullptr, nullptr);
+                    return result;
+                }
+            }
+        }
+    } catch (...) {}
+#endif
     const std::filesystem::path filePath(path);
     const auto stem = filePath.stem().string();
     if (!stem.empty()) {
@@ -69,6 +158,14 @@ DataSourceKind classifyDataset(GDALDataset &dataset) {
 }
 
 std::optional<GeographicBounds> transformExtentToWgs84(const OGRSpatialReference &rawSrc, double minx, double miny, double maxx, double maxy) {
+    auto directBounds = [&]() -> std::optional<GeographicBounds> {
+        GeographicBounds bounds{minx, miny, maxx, maxy};
+        if (!bounds.isValid()) {
+            return std::nullopt;
+        }
+        return bounds;
+    };
+
     OGRSpatialReference src(rawSrc);
     src.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
@@ -77,6 +174,14 @@ std::optional<GeographicBounds> transformExtentToWgs84(const OGRSpatialReference
         return std::nullopt;
     }
     dst.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    if (src.IsSame(&dst)) {
+        return directBounds();
+    }
+
+    if (src.IsGeographic()) {
+        return directBounds();
+    }
 
     auto *ct = OGRCreateCoordinateTransformation(&src, &dst);
     if (ct == nullptr) {
@@ -330,6 +435,8 @@ VectorLayerInfo collectVectorMetadata(GDALDataset &ds) {
 std::optional<DataSourceDescriptor> GdalDatasetInspector::inspect(const std::string &path) const {
     ensureGdalRegistered();
 
+    spdlog::info("GdalDatasetInspector: inspecting '{}' GDAL_FILENAME_IS_UTF8={}", path,
+                 CPLGetConfigOption("GDAL_FILENAME_IS_UTF8", "(unset)"));
     struct DatasetCloser {
         void operator()(GDALDataset *ds) const {
             if (ds) GDALClose(ds);
@@ -344,24 +451,46 @@ std::optional<DataSourceDescriptor> GdalDatasetInspector::inspect(const std::str
         return std::nullopt;
     }
 
-    const std::filesystem::path filePath(path);
+    spdlog::info("GdalDatasetInspector: opened '{}' layers={} rasters={}", path,
+                 dataset->GetLayerCount(), dataset->GetRasterCount());
+
     const std::string stem = stemOrFilename(path);
     const DataSourceKind kind = classifyDataset(*dataset);
 
     const auto pathHash = std::to_string(std::hash<std::string>{}(path));
     const std::string layerId = stem + "-" + pathHash.substr(0, 8);
 
+    std::string displayName = stem;
+#if defined(Q_OS_WIN)
+    try {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+        if (wlen > 0) {
+            std::wstring wpath(wlen - 1, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
+            auto fsPath = std::filesystem::path(wpath);
+            auto wname = fsPath.filename().wstring();
+            int mlen = WideCharToMultiByte(CP_UTF8, 0, wname.c_str(), -1, nullptr, 0, nullptr, nullptr);
+            if (mlen > 0) {
+                displayName.resize(mlen - 1);
+                WideCharToMultiByte(CP_UTF8, 0, wname.c_str(), -1, displayName.data(), mlen, nullptr, nullptr);
+            }
+        }
+    } catch (...) {}
+#endif
+
     DataSourceDescriptor descriptor{
         layerId,
-        filePath.filename().string(),
+        displayName,
         path,
         kind,
         std::nullopt,
     };
 
+    spdlog::info("GdalDatasetInspector: computing geographic bounds...");
     if (auto bounds = computeGeographicBounds(*dataset, kind)) {
         descriptor.geographicBounds = *bounds;
     }
+    spdlog::info("GdalDatasetInspector: collecting metadata...");
 
     if (kind == DataSourceKind::Vector) {
         descriptor.vectorMetadata = collectVectorMetadata(*dataset);
