@@ -1,5 +1,6 @@
 #include "ui/PropertyDock.h"
 
+#include <algorithm>
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QFormLayout>
@@ -24,6 +25,15 @@ namespace {
 
 QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
+}
+
+int attributePriority(const QString &name) {
+    const QString key = name.trimmed().toLower();
+    if (key == "name" || key == "名称") return 0;
+    if (key == "id" || key == "fid" || key == "objectid") return 1;
+    if (key == "code" || key == "编码") return 2;
+    if (key == "type" || key == "类型" || key == "class") return 3;
+    return 10;
 }
 
 QLabel *makeValueLabel(const QString &text, QWidget *parent, bool wordWrap = false) {
@@ -184,9 +194,19 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
     pickGroup_->setVisible(pickForm_->rowCount() > 0);
 
     pickTable_->clearContents();
-    pickTable_->setRowCount(attributes.size());
-    for (int i = 0; i < attributes.size(); ++i) {
-        const auto &[name, value] = attributes[i];
+    auto sortedAttributes = attributes;
+    std::stable_sort(sortedAttributes.begin(), sortedAttributes.end(), [](const auto &lhs, const auto &rhs) {
+        const int lp = attributePriority(lhs.first);
+        const int rp = attributePriority(rhs.first);
+        if (lp != rp) {
+            return lp < rp;
+        }
+        return lhs.first.localeAwareCompare(rhs.first) < 0;
+    });
+
+    pickTable_->setRowCount(sortedAttributes.size());
+    for (int i = 0; i < sortedAttributes.size(); ++i) {
+        const auto &[name, value] = sortedAttributes[i];
         pickTable_->setItem(i, 0, new QTableWidgetItem(name));
         pickTable_->setItem(i, 1, new QTableWidgetItem(value));
     }
