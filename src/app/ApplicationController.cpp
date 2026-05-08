@@ -131,10 +131,13 @@ void ApplicationController::importFile(const std::string &path) {
     if (dir.exists()) {
         const QFileInfoList vectorEntries = dir.entryInfoList(supportedDirectoryImportFilters(), QDir::Files);
         if (vectorEntries.isEmpty()) {
-            window_.statusBar()->showMessage(u"目录中未找到矢量数据文件。"_s, 3000);
-            QMessageBox::warning(&window_, u"导入失败"_s,
-                                 QString(u"目录中未找到 Shapefile (.shp) 文件：\n%1"_s)
-                                     .arg(qPath));
+            window_.statusBar()->showMessage(u"目录中未找到可导入的矢量数据文件。"_s, 3000);
+            QMessageBox::warning(
+                &window_,
+                u"导入失败"_s,
+                QString(
+                    u"目录中未找到支持的矢量文件：\n%1\n\n支持格式：Shapefile (.shp)、GeoJSON (.geojson/.json)、GeoPackage (.gpkg)、KML (.kml)、GML (.gml)"_s)
+                    .arg(qPath));
             return;
         }
         for (const QFileInfo &fi : vectorEntries) {
@@ -153,7 +156,7 @@ void ApplicationController::importFile(const std::string &path) {
             spdlog::warn("ApplicationController: import failed for '{}'", importPath);
             window_.statusBar()->showMessage(u"导入失败。"_s, 3000);
             QMessageBox::warning(&window_, u"导入失败"_s,
-                                 QString(u"不支持或无法读取的数据源：\n%1\n\n支持的格式包括 GeoTIFF (.tif)、IMG (.img)、Shapefile (.shp)、\nGeoJSON (.geojson)、GeoPackage (.gpkg)、KML (.kml) 等。"_s)
+                                 QString(u"不支持或无法读取的数据源：\n%1\n\n支持的格式包括 GeoTIFF (.tif)、IMG (.img)、Shapefile (.shp)、\nGeoJSON (.geojson/.json)、GeoPackage (.gpkg)、KML (.kml)、GML (.gml) 等。"_s)
                                      .arg(utf8(importPath)));
             return;
         }
