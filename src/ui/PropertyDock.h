@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QDockWidget>
+#include <QList>
 #include <optional>
+#include <utility>
 
 struct RasterMetadata;
 struct VectorLayerInfo;
@@ -20,6 +22,8 @@ class PropertyDock : public QDockWidget {
 public:
     explicit PropertyDock(QWidget *parent = nullptr);
     void showText(const QString &text);
+    void showPickDetails(const QStringList &summaryLines,
+                         const QList<std::pair<QString, QString>> &attributes);
     void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,
@@ -32,6 +36,8 @@ signals:
 
 private:
     void setupUi();
+    void clearForm(QFormLayout *form);
+    void clearInspection();
     void onOpacitySliderChanged(int value);
     void onBandComboChanged(int index);
 
@@ -52,4 +58,7 @@ private:
     QGroupBox *vectorGroup_;
     QFormLayout *vectorForm_;
     QTableWidget *fieldTable_;
+    QGroupBox *pickGroup_;
+    QFormLayout *pickForm_;
+    QTableWidget *pickTable_;
 };

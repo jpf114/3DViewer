@@ -3,6 +3,7 @@ add_executable(ApplicationSmokeTests
     ../src/app/MainWindow.cpp
     ../src/globe/GlobeWidget.cpp
     ../src/globe/SceneController.cpp
+    ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
     ../src/tools/PickTool.cpp
     ../src/tools/ToolManager.cpp

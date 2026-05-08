@@ -2,7 +2,9 @@
 
 #include <QStringList>
 #include <QMainWindow>
+#include <QList>
 #include <optional>
+#include <utility>
 
 class QCloseEvent;
 struct RasterMetadata;
@@ -26,6 +28,8 @@ public:
     void addLayerRow(const Layer &layer);
     void removeLayerRow(const std::string &layerId);
     void showLayerDetails(const QString &text);
+    void showPickDetails(const QStringList &summaryLines,
+                         const QList<std::pair<QString, QString>> &attributes);
     void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,

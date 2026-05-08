@@ -1,9 +1,12 @@
 #include "ui/PropertyDock.h"
 
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QSlider>
@@ -18,10 +21,12 @@
 using namespace Qt::Literals::StringLiterals;
 
 namespace {
+
 QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
-}
+
+} // namespace
 
 PropertyDock::PropertyDock(QWidget *parent)
     : QDockWidget(u"属性"_s, parent) {
@@ -40,8 +45,28 @@ void PropertyDock::setupUi() {
 
     text_ = new QTextEdit(propertiesWidget_);
     text_->setReadOnly(true);
-    text_->setMaximumHeight(80);
+    text_->setMaximumHeight(64);
     layout->addWidget(text_);
+
+    pickGroup_ = new QGroupBox(u"拾取结果"_s, propertiesWidget_);
+    pickForm_ = new QFormLayout(pickGroup_);
+    pickForm_->setLabelAlignment(Qt::AlignRight);
+    pickForm_->setSpacing(6);
+    pickGroup_->setVisible(false);
+    layout->addWidget(pickGroup_);
+
+    pickTable_ = new QTableWidget(propertiesWidget_);
+    pickTable_->setColumnCount(2);
+    pickTable_->setHorizontalHeaderLabels({u"属性"_s, u"值"_s});
+    pickTable_->horizontalHeader()->setStretchLastSection(true);
+    pickTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    pickTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    pickTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    pickTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    pickTable_->setAlternatingRowColors(true);
+    pickTable_->verticalHeader()->setVisible(false);
+    pickTable_->setVisible(false);
+    layout->addWidget(pickTable_);
 
     basicGroup_ = new QGroupBox(u"基本信息"_s, propertiesWidget_);
     basicForm_ = new QFormLayout(basicGroup_);
@@ -64,7 +89,7 @@ void PropertyDock::setupUi() {
     opacityLayout->addWidget(opacityLabel_);
     layout->addWidget(opacityWidget);
 
-    bandLabel_ = new QLabel(u"波段组合："_s, propertiesWidget_);
+    bandLabel_ = new QLabel(u"波段组合"_s, propertiesWidget_);
     layout->addWidget(bandLabel_);
 
     bandCombo_ = new QComboBox(propertiesWidget_);
@@ -82,7 +107,7 @@ void PropertyDock::setupUi() {
 
     bandTable_ = new QTableWidget(propertiesWidget_);
     bandTable_->setColumnCount(4);
-    bandTable_->setHorizontalHeaderLabels({u"波段"_s, u"类型"_s, u"范围"_s, u"无数据值"_s});
+    bandTable_->setHorizontalHeaderLabels({u"波段"_s, u"类型"_s, u"范围"_s, u"NoData"_s});
     bandTable_->horizontalHeader()->setStretchLastSection(true);
     bandTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     bandTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -125,6 +150,37 @@ void PropertyDock::setupUi() {
 
 void PropertyDock::showText(const QString &text) {
     text_->setPlainText(text);
+    clearInspection();
+}
+
+void PropertyDock::showPickDetails(const QStringList &summaryLines,
+                                   const QList<std::pair<QString, QString>> &attributes) {
+    text_->clear();
+    clearInspection();
+
+    for (const QString &line : summaryLines) {
+        int separator = line.indexOf(':');
+        if (separator <= 0) {
+            separator = line.indexOf(u'：');
+        }
+        if (separator <= 0) {
+            continue;
+        }
+
+        const QString label = line.left(separator + 1);
+        const QString value = line.mid(separator + 1).trimmed();
+        pickForm_->addRow(label, new QLabel(value, pickGroup_));
+    }
+
+    pickGroup_->setVisible(pickForm_->rowCount() > 0);
+
+    pickTable_->setRowCount(attributes.size());
+    for (int i = 0; i < attributes.size(); ++i) {
+        const auto &[name, value] = attributes[i];
+        pickTable_->setItem(i, 0, new QTableWidgetItem(name));
+        pickTable_->setItem(i, 1, new QTableWidgetItem(value));
+    }
+    pickTable_->setVisible(!attributes.isEmpty());
 }
 
 void PropertyDock::showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
@@ -133,13 +189,11 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
                                        const std::optional<VectorLayerInfo> &vectorMeta) {
     currentLayerId_ = layerId;
 
-    while (basicForm_->rowCount() > 0) {
-        basicForm_->removeRow(0);
-    }
-    basicForm_->addRow(u"名称："_s, new QLabel(name));
-    basicForm_->addRow(u"类型："_s, new QLabel(typeText));
-    basicForm_->addRow(u"来源："_s, new QLabel(source));
-    basicForm_->addRow(u"可见："_s, new QLabel(visible ? u"是"_s : u"否"_s));
+    clearForm(basicForm_);
+    basicForm_->addRow(u"名称:"_s, new QLabel(name));
+    basicForm_->addRow(u"类型:"_s, new QLabel(typeText));
+    basicForm_->addRow(u"来源:"_s, new QLabel(source));
+    basicForm_->addRow(u"可见:"_s, new QLabel(visible ? u"是"_s : u"否"_s));
     basicGroup_->setVisible(true);
 
     opacitySlider_->blockSignals(true);
@@ -173,21 +227,21 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
     }
 
     if (rasterMeta.has_value()) {
-        while (rasterForm_->rowCount() > 0) {
-            rasterForm_->removeRow(0);
-        }
-        rasterForm_->addRow(u"驱动："_s, new QLabel(utf8(rasterMeta->driverName)));
-        rasterForm_->addRow(u"尺寸："_s, new QLabel(QString("%1 x %2").arg(rasterMeta->rasterXSize).arg(rasterMeta->rasterYSize)));
-        rasterForm_->addRow(u"波段数："_s, new QLabel(QString::number(rasterMeta->bandCount)));
+        clearForm(rasterForm_);
+        rasterForm_->addRow(u"驱动:"_s, new QLabel(utf8(rasterMeta->driverName)));
+        rasterForm_->addRow(u"尺寸:"_s, new QLabel(QString("%1 x %2").arg(rasterMeta->rasterXSize).arg(rasterMeta->rasterYSize)));
+        rasterForm_->addRow(u"波段数:"_s, new QLabel(QString::number(rasterMeta->bandCount)));
         if (!rasterMeta->epsgCode.empty()) {
-            rasterForm_->addRow(u"坐标系："_s, new QLabel(utf8(rasterMeta->epsgCode)));
+            rasterForm_->addRow(u"坐标系:"_s, new QLabel(utf8(rasterMeta->epsgCode)));
         }
         if (rasterMeta->pixelSizeX > 0 || rasterMeta->pixelSizeY > 0) {
-            rasterForm_->addRow(u"像素大小："_s, new QLabel(QString("%1 x %2")
-                .arg(rasterMeta->pixelSizeX, 0, 'f', 6).arg(rasterMeta->pixelSizeY, 0, 'f', 6)));
+            rasterForm_->addRow(
+                u"像素大小:"_s,
+                new QLabel(QString("%1 x %2").arg(rasterMeta->pixelSizeX, 0, 'f', 6).arg(rasterMeta->pixelSizeY, 0, 'f', 6)));
         }
         rasterGroup_->setVisible(true);
 
+        bandTable_->clearContents();
         bandTable_->setRowCount(static_cast<int>(rasterMeta->bands.size()));
         for (int i = 0; i < static_cast<int>(rasterMeta->bands.size()); ++i) {
             const auto &band = rasterMeta->bands[i];
@@ -211,17 +265,16 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
     }
 
     if (vectorMeta.has_value()) {
-        while (vectorForm_->rowCount() > 0) {
-            vectorForm_->removeRow(0);
-        }
-        vectorForm_->addRow(u"图层："_s, new QLabel(utf8(vectorMeta->name)));
-        vectorForm_->addRow(u"几何类型："_s, new QLabel(utf8(vectorMeta->geometryType)));
-        vectorForm_->addRow(u"要素数："_s, new QLabel(QString::number(vectorMeta->featureCount)));
+        clearForm(vectorForm_);
+        vectorForm_->addRow(u"图层:"_s, new QLabel(utf8(vectorMeta->name)));
+        vectorForm_->addRow(u"几何类型:"_s, new QLabel(utf8(vectorMeta->geometryType)));
+        vectorForm_->addRow(u"要素数:"_s, new QLabel(QString::number(vectorMeta->featureCount)));
         if (!vectorMeta->epsgCode.empty()) {
-            vectorForm_->addRow(u"坐标系："_s, new QLabel(utf8(vectorMeta->epsgCode)));
+            vectorForm_->addRow(u"坐标系:"_s, new QLabel(utf8(vectorMeta->epsgCode)));
         }
         vectorGroup_->setVisible(true);
 
+        fieldTable_->clearContents();
         fieldTable_->setRowCount(static_cast<int>(vectorMeta->fields.size()));
         for (int i = 0; i < static_cast<int>(vectorMeta->fields.size()); ++i) {
             const auto &field = vectorMeta->fields[i];
@@ -249,6 +302,20 @@ void PropertyDock::clearLayerProperties() {
     bandTable_->setVisible(false);
     vectorGroup_->setVisible(false);
     fieldTable_->setVisible(false);
+}
+
+void PropertyDock::clearForm(QFormLayout *form) {
+    while (form->rowCount() > 0) {
+        form->removeRow(0);
+    }
+}
+
+void PropertyDock::clearInspection() {
+    clearForm(pickForm_);
+    pickGroup_->setVisible(false);
+    pickTable_->clearContents();
+    pickTable_->setRowCount(0);
+    pickTable_->setVisible(false);
 }
 
 void PropertyDock::onOpacitySliderChanged(int value) {

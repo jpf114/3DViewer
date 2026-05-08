@@ -27,6 +27,20 @@ using namespace Qt::Literals::StringLiterals;
 namespace {
 constexpr int kMaxRecentFiles = 5;
 constexpr const char *kRecentFilesKey = "recentFiles";
+
+bool splitKeyValue(const QString &line, QString *key, QString *value) {
+    int separator = line.indexOf(':');
+    if (separator <= 0) {
+        separator = line.indexOf(u'：');
+    }
+    if (separator <= 0) {
+        return false;
+    }
+
+    *key = line.left(separator).trimmed();
+    *value = line.mid(separator + 1).trimmed();
+    return true;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -125,7 +139,44 @@ void MainWindow::removeLayerRow(const std::string &layerId) {
 }
 
 void MainWindow::showLayerDetails(const QString &text) {
+    const QStringList lines = text.split('\n');
+    QStringList summaryLines;
+    QList<std::pair<QString, QString>> attributes;
+    bool hasStructuredPick = false;
+
+    for (const QString &rawLine : lines) {
+        const QString line = rawLine.trimmed();
+        if (line.isEmpty() || line.startsWith("---")) {
+            continue;
+        }
+
+        QString key;
+        QString value;
+        if (!splitKeyValue(line, &key, &value)) {
+            continue;
+        }
+
+        if (rawLine.startsWith("  ")) {
+            attributes.append({key, value});
+            hasStructuredPick = true;
+            continue;
+        }
+
+        summaryLines.append(key + ": " + value);
+        hasStructuredPick = true;
+    }
+
+    if (hasStructuredPick && !summaryLines.isEmpty()) {
+        propertyDock_->showPickDetails(summaryLines, attributes);
+        return;
+    }
+
     propertyDock_->showText(text);
+}
+
+void MainWindow::showPickDetails(const QStringList &summaryLines,
+                                 const QList<std::pair<QString, QString>> &attributes) {
+    propertyDock_->showPickDetails(summaryLines, attributes);
 }
 
 void MainWindow::showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
