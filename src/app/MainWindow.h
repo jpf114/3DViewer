@@ -6,6 +6,8 @@
 #include <optional>
 #include <utility>
 
+#include "data/DataSourceDescriptor.h"
+
 class QCloseEvent;
 struct RasterMetadata;
 struct VectorLayerInfo;
@@ -33,7 +35,8 @@ public:
     void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,
-                             const std::optional<VectorLayerInfo> &vectorMeta);
+                             const std::optional<VectorLayerInfo> &vectorMeta,
+                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt);
     void clearLayerProperties();
     void setRecentFiles(const QStringList &files);
 
@@ -45,6 +48,7 @@ signals:
     void removeLayerRequested(const QString &layerId);
     void layerOpacityChanged(const QString &layerId, double opacity);
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
+    void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
     void toolChanged(int toolId);
     void resetViewRequested();
     void zoomToLayerRequested(const QString &layerId);

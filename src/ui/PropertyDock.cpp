@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
@@ -65,6 +66,25 @@ QTableWidgetItem *makeTableItem(const QString &text) {
     return item;
 }
 
+QDoubleSpinBox *makeSpinBox(QWidget *parent,
+                            const char *objectName,
+                            double minimum,
+                            double maximum,
+                            int decimals,
+                            double singleStep,
+                            const QString &suffix = QString()) {
+    auto *spin = new QDoubleSpinBox(parent);
+    spin->setObjectName(QString::fromLatin1(objectName));
+    spin->setRange(minimum, maximum);
+    spin->setDecimals(decimals);
+    spin->setSingleStep(singleStep);
+    spin->setKeyboardTracking(false);
+    if (!suffix.isEmpty()) {
+        spin->setSuffix(suffix);
+    }
+    return spin;
+}
+
 } // namespace
 
 PropertyDock::PropertyDock(QWidget *parent)
@@ -113,6 +133,23 @@ void PropertyDock::setupUi() {
     basicForm_->setSpacing(6);
     basicGroup_->setVisible(false);
     layout->addWidget(basicGroup_);
+
+    modelGroup_ = new QGroupBox(u"模型定位"_s, propertiesWidget_);
+    modelForm_ = new QFormLayout(modelGroup_);
+    modelForm_->setLabelAlignment(Qt::AlignRight);
+    modelForm_->setSpacing(6);
+    modelLongitudeSpin_ = makeSpinBox(modelGroup_, "modelLongitudeSpin", -180.0, 180.0, 6, 0.0001);
+    modelLatitudeSpin_ = makeSpinBox(modelGroup_, "modelLatitudeSpin", -90.0, 90.0, 6, 0.0001);
+    modelHeightSpin_ = makeSpinBox(modelGroup_, "modelHeightSpin", -100000.0, 100000.0, 2, 1.0, u" m"_s);
+    modelScaleSpin_ = makeSpinBox(modelGroup_, "modelScaleSpin", 0.01, 100000.0, 3, 0.1);
+    modelHeadingSpin_ = makeSpinBox(modelGroup_, "modelHeadingSpin", -360.0, 360.0, 2, 1.0, u"°"_s);
+    modelForm_->addRow(u"经度:"_s, modelLongitudeSpin_);
+    modelForm_->addRow(u"纬度:"_s, modelLatitudeSpin_);
+    modelForm_->addRow(u"高度:"_s, modelHeightSpin_);
+    modelForm_->addRow(u"缩放:"_s, modelScaleSpin_);
+    modelForm_->addRow(u"航向:"_s, modelHeadingSpin_);
+    modelGroup_->setVisible(false);
+    layout->addWidget(modelGroup_);
 
     opacityWidget_ = new QWidget(propertiesWidget_);
     auto *opacityLayout = new QHBoxLayout(opacityWidget_);
@@ -186,6 +223,11 @@ void PropertyDock::setupUi() {
 
     connect(opacitySlider_, &QSlider::valueChanged, this, &PropertyDock::onOpacitySliderChanged);
     connect(bandCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &PropertyDock::onBandComboChanged);
+    connect(modelLongitudeSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
+    connect(modelLatitudeSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
+    connect(modelHeightSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
+    connect(modelScaleSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
+    connect(modelHeadingSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
 }
 
 void PropertyDock::showText(const QString &text) {
@@ -237,7 +279,8 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
 void PropertyDock::showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                                        const QString &source, bool visible, double opacity,
                                        const std::optional<RasterMetadata> &rasterMeta,
-                                       const std::optional<VectorLayerInfo> &vectorMeta) {
+                                       const std::optional<VectorLayerInfo> &vectorMeta,
+                                       const std::optional<ModelPlacement> &modelPlacement) {
     currentLayerId_ = layerId;
     text_->setPlainText(u"当前显示选中图层属性。"_s);
 
@@ -253,6 +296,27 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
     opacitySlider_->setValue(static_cast<int>(opacity * 100.0 + 0.5));
     opacitySlider_->blockSignals(false);
     opacityLabel_->setText(QString::number(opacity, 'f', 2));
+
+    if (modelPlacement.has_value()) {
+        modelLongitudeSpin_->blockSignals(true);
+        modelLatitudeSpin_->blockSignals(true);
+        modelHeightSpin_->blockSignals(true);
+        modelScaleSpin_->blockSignals(true);
+        modelHeadingSpin_->blockSignals(true);
+        modelLongitudeSpin_->setValue(modelPlacement->longitude);
+        modelLatitudeSpin_->setValue(modelPlacement->latitude);
+        modelHeightSpin_->setValue(modelPlacement->height);
+        modelScaleSpin_->setValue(modelPlacement->scale > 0.0 ? modelPlacement->scale : 1.0);
+        modelHeadingSpin_->setValue(modelPlacement->heading);
+        modelLongitudeSpin_->blockSignals(false);
+        modelLatitudeSpin_->blockSignals(false);
+        modelHeightSpin_->blockSignals(false);
+        modelScaleSpin_->blockSignals(false);
+        modelHeadingSpin_->blockSignals(false);
+        modelGroup_->setVisible(true);
+    } else {
+        modelGroup_->setVisible(false);
+    }
 
     const int bandCount = rasterMeta.has_value() ? rasterMeta->bandCount : 0;
     currentBandCount_ = bandCount;
@@ -357,6 +421,22 @@ void PropertyDock::clearLayerProperties() {
     bandCombo_->setVisible(false);
     bandLabel_->setVisible(false);
     basicGroup_->setVisible(false);
+    modelLongitudeSpin_->blockSignals(true);
+    modelLatitudeSpin_->blockSignals(true);
+    modelHeightSpin_->blockSignals(true);
+    modelScaleSpin_->blockSignals(true);
+    modelHeadingSpin_->blockSignals(true);
+    modelLongitudeSpin_->setValue(0.0);
+    modelLatitudeSpin_->setValue(0.0);
+    modelHeightSpin_->setValue(0.0);
+    modelScaleSpin_->setValue(1.0);
+    modelHeadingSpin_->setValue(0.0);
+    modelLongitudeSpin_->blockSignals(false);
+    modelLatitudeSpin_->blockSignals(false);
+    modelHeightSpin_->blockSignals(false);
+    modelScaleSpin_->blockSignals(false);
+    modelHeadingSpin_->blockSignals(false);
+    modelGroup_->setVisible(false);
     rasterGroup_->setVisible(false);
     bandTable_->setVisible(false);
     vectorGroup_->setVisible(false);
@@ -400,4 +480,18 @@ void PropertyDock::onBandComboChanged(int index) {
     const int green = parts[1].toInt();
     const int blue = parts[2].toInt();
     emit bandMappingChanged(currentLayerId_, red, green, blue);
+}
+
+void PropertyDock::onModelPlacementChanged() {
+    if (currentLayerId_.isEmpty()) {
+        return;
+    }
+
+    ModelPlacement placement;
+    placement.longitude = modelLongitudeSpin_->value();
+    placement.latitude = modelLatitudeSpin_->value();
+    placement.height = modelHeightSpin_->value();
+    placement.scale = modelScaleSpin_->value();
+    placement.heading = modelHeadingSpin_->value();
+    emit modelPlacementChanged(currentLayerId_, placement);
 }

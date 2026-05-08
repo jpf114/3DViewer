@@ -5,6 +5,7 @@
 
 #include "globe/PickResult.h"
 
+struct ModelPlacement;
 class DataImporter;
 class LayerManager;
 class MainWindow;
@@ -21,6 +22,7 @@ public:
     void showLayerDetails(const std::string &layerId);
     void setLayerVisibility(const std::string &layerId, bool visible);
     void setLayerOpacity(const std::string &layerId, double opacity);
+    void setModelPlacement(const std::string &layerId, const ModelPlacement &placement);
     void setBandMapping(const std::string &layerId, int red, int green, int blue);
     void removeLayer(const std::string &layerId);
     void zoomToLayer(const std::string &layerId);

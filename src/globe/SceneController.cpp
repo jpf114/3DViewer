@@ -285,9 +285,38 @@ GeographicBounds approximateBoundsForModel(const ModelPlacement &placement, doub
     };
 }
 
+void applyModelPlacement(osgEarth::GeoTransform *geoTransform,
+                         osg::PositionAttitudeTransform *modelTransform,
+                         const ModelPlacement &placement) {
+    if (geoTransform == nullptr || modelTransform == nullptr) {
+        return;
+    }
+
+    const double safeScale = placement.scale > 0.0 ? placement.scale : 1.0;
+    modelTransform->setScale(osg::Vec3d(safeScale, safeScale, safeScale));
+    modelTransform->setAttitude(osg::Quat(
+        placement.heading * std::numbers::pi / 180.0,
+        osg::Vec3d(0.0, 0.0, 1.0)));
+    geoTransform->setPosition(osgEarth::GeoPoint(
+        osgEarth::SpatialReference::get("wgs84"),
+        placement.longitude,
+        placement.latitude,
+        placement.height,
+        osgEarth::ALTMODE_ABSOLUTE));
+}
+
 void syncModelState(osg::Node *sceneNode, const Layer &layer) {
     if (sceneNode == nullptr) {
         return;
+    }
+
+    if (const auto placement = layer.modelPlacement(); placement.has_value()) {
+        auto *geoTransform = dynamic_cast<osgEarth::GeoTransform *>(sceneNode);
+        osg::PositionAttitudeTransform *modelTransform = nullptr;
+        if (geoTransform && geoTransform->getNumChildren() > 0) {
+            modelTransform = dynamic_cast<osg::PositionAttitudeTransform *>(geoTransform->getChild(0));
+        }
+        applyModelPlacement(geoTransform, modelTransform, *placement);
     }
 
     sceneNode->setNodeMask(layer.visible() ? ~0u : 0u);
@@ -312,25 +341,16 @@ osg::ref_ptr<osg::Node> createModelSceneNode(Layer &layer, GeographicBounds *bou
         return nullptr;
     }
 
-    const double safeScale = placement.scale > 0.0 ? placement.scale : 1.0;
     auto modelTransform = osg::ref_ptr<osg::PositionAttitudeTransform>(new osg::PositionAttitudeTransform());
-    modelTransform->setScale(osg::Vec3d(safeScale, safeScale, safeScale));
-    modelTransform->setAttitude(osg::Quat(
-        placement.heading * std::numbers::pi / 180.0,
-        osg::Vec3d(0.0, 0.0, 1.0)));
     modelTransform->addChild(modelNode.get());
 
     auto geoTransform = osg::ref_ptr<osgEarth::GeoTransform>(new osgEarth::GeoTransform());
-    geoTransform->setPosition(osgEarth::GeoPoint(
-        osgEarth::SpatialReference::get("wgs84"),
-        placement.longitude,
-        placement.latitude,
-        placement.height,
-        osgEarth::ALTMODE_ABSOLUTE));
+    applyModelPlacement(geoTransform.get(), modelTransform.get(), placement);
     geoTransform->addChild(modelTransform.get());
 
     syncModelState(geoTransform.get(), layer);
 
+    const double safeScale = placement.scale > 0.0 ? placement.scale : 1.0;
     const double radiusMeters = (std::max)(
         kDefaultModelRadiusMeters,
         static_cast<double>(modelNode->getBound().radius()) * safeScale);
@@ -647,6 +667,13 @@ void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     const auto modelIt = impl_->renderModelNodes.find(layer->id());
     if (modelIt != impl_->renderModelNodes.end()) {
         syncModelState(modelIt->second.get(), *layer);
+        const auto placement = layer->modelPlacement();
+        if (placement.has_value()) {
+            const auto radiusMeters = (std::max)(
+                kDefaultModelRadiusMeters,
+                static_cast<double>(modelIt->second->getBound().radius()));
+            layer->setGeographicBounds(approximateBoundsForModel(*placement, radiusMeters));
+        }
         return;
     }
 

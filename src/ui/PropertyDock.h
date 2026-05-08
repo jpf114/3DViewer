@@ -5,10 +5,13 @@
 #include <optional>
 #include <utility>
 
+#include "data/DataSourceDescriptor.h"
+
 struct RasterMetadata;
 struct VectorLayerInfo;
 
 class QComboBox;
+class QDoubleSpinBox;
 class QSlider;
 class QLabel;
 class QGroupBox;
@@ -28,12 +31,14 @@ public:
     void showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,
-                             const std::optional<VectorLayerInfo> &vectorMeta);
+                             const std::optional<VectorLayerInfo> &vectorMeta,
+                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt);
     void clearLayerProperties();
 
 signals:
     void opacityChanged(const QString &layerId, double opacity);
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
+    void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
 
 private:
     void setupUi();
@@ -41,6 +46,7 @@ private:
     void clearInspection();
     void onOpacitySliderChanged(int value);
     void onBandComboChanged(int index);
+    void onModelPlacementChanged();
 
     QTextEdit *text_;
     QWidget *opacityWidget_;
@@ -54,6 +60,13 @@ private:
 
     QGroupBox *basicGroup_;
     QFormLayout *basicForm_;
+    QGroupBox *modelGroup_;
+    QFormLayout *modelForm_;
+    QDoubleSpinBox *modelLongitudeSpin_;
+    QDoubleSpinBox *modelLatitudeSpin_;
+    QDoubleSpinBox *modelHeightSpin_;
+    QDoubleSpinBox *modelScaleSpin_;
+    QDoubleSpinBox *modelHeadingSpin_;
     QGroupBox *rasterGroup_;
     QFormLayout *rasterForm_;
     QTableWidget *bandTable_;

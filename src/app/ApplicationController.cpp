@@ -129,6 +129,10 @@ ApplicationController::ApplicationController(MainWindow &window,
         setBandMapping(layerId.toStdString(), red, green, blue);
     });
 
+    QObject::connect(&window_, &MainWindow::modelPlacementChanged, [this](const QString &layerId, const ModelPlacement &placement) {
+        setModelPlacement(layerId.toStdString(), placement);
+    });
+
     QObject::connect(&window_, &MainWindow::toolChanged, [this](int toolId) {
         window_.globeWidget()->toolManager().setActiveTool(static_cast<ToolId>(toolId));
     });
@@ -230,7 +234,8 @@ void ApplicationController::showLayerDetails(const std::string &layerId) {
         layer->visible(),
         layer->opacity(),
         layer->rasterMetadata(),
-        layer->vectorMetadata());
+        layer->vectorMetadata(),
+        layer->modelPlacement());
 }
 
 void ApplicationController::setLayerVisibility(const std::string &layerId, bool visible) {
@@ -298,6 +303,17 @@ void ApplicationController::setLayerOpacity(const std::string &layerId, double o
 
     layer->setOpacity(opacity);
     sceneController_.syncLayerState(layer);
+}
+
+void ApplicationController::setModelPlacement(const std::string &layerId, const ModelPlacement &placement) {
+    const auto layer = layerManager_.findById(layerId);
+    if (!layer || layer->kind() != LayerKind::Model) {
+        return;
+    }
+
+    layer->setModelPlacement(placement);
+    sceneController_.syncLayerState(layer);
+    showLayerDetails(layerId);
 }
 
 void ApplicationController::setBandMapping(const std::string &layerId, int red, int green, int blue) {

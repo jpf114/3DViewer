@@ -152,6 +152,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(layerDock_, &LayerTreeDock::zoomToLayerRequested, this, &MainWindow::zoomToLayerRequested);
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);
     connect(propertyDock_, &PropertyDock::bandMappingChanged, this, &MainWindow::bandMappingChanged);
+    connect(propertyDock_, &PropertyDock::modelPlacementChanged, this, &MainWindow::modelPlacementChanged);
     connect(globeWidget_, &GlobeWidget::cursorTextChanged, statusController_, &StatusBarController::setCursorText);
     connect(globeWidget_, &GlobeWidget::measurementTextChanged, this, [this](const QString &text) {
         propertyDock_->showText(text);
@@ -219,8 +220,9 @@ void MainWindow::showPickDetails(const QStringList &summaryLines,
 void MainWindow::showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
                                      const QString &source, bool visible, double opacity,
                                      const std::optional<RasterMetadata> &rasterMeta,
-                                     const std::optional<VectorLayerInfo> &vectorMeta) {
-    propertyDock_->showLayerProperties(layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta);
+                                     const std::optional<VectorLayerInfo> &vectorMeta,
+                                     const std::optional<ModelPlacement> &modelPlacement) {
+    propertyDock_->showLayerProperties(layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta, modelPlacement);
 }
 
 void MainWindow::clearLayerProperties() {
