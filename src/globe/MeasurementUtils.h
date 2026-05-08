@@ -42,4 +42,37 @@ inline double polylineLengthMeters(const std::vector<MeasurementPoint> &points) 
     return total;
 }
 
+inline double polygonAreaSquareMeters(const std::vector<MeasurementPoint> &points) {
+    if (points.size() < 3) {
+        return 0.0;
+    }
+
+    constexpr double kEarthRadiusMeters = 6371008.8;
+    double centerLon = 0.0;
+    double centerLat = 0.0;
+    for (const auto &point : points) {
+        centerLon += point.longitude;
+        centerLat += point.latitude;
+    }
+    centerLon /= static_cast<double>(points.size());
+    centerLat /= static_cast<double>(points.size());
+
+    const double centerLonRad = degreesToRadians(centerLon);
+    const double centerLatRad = degreesToRadians(centerLat);
+
+    double twiceArea = 0.0;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const auto &a = points[i];
+        const auto &b = points[(i + 1) % points.size()];
+
+        const double ax = kEarthRadiusMeters * (degreesToRadians(a.longitude) - centerLonRad) * std::cos(centerLatRad);
+        const double ay = kEarthRadiusMeters * (degreesToRadians(a.latitude) - centerLatRad);
+        const double bx = kEarthRadiusMeters * (degreesToRadians(b.longitude) - centerLonRad) * std::cos(centerLatRad);
+        const double by = kEarthRadiusMeters * (degreesToRadians(b.latitude) - centerLatRad);
+        twiceArea += ax * by - bx * ay;
+    }
+
+    return std::abs(twiceArea) * 0.5;
+}
+
 } // namespace globe

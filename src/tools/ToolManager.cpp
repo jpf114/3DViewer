@@ -1,3 +1,4 @@
+#include "tools/MeasureAreaTool.h"
 #include "tools/MeasureTool.h"
 #include "tools/ToolManager.h"
 
@@ -14,6 +15,9 @@ void ToolManager::setActiveTool(ToolId toolId) {
 
     currentToolId_ = toolId;
     switch (toolId) {
+    case ToolId::MeasureArea:
+        currentTool_ = std::make_unique<MeasureAreaTool>();
+        break;
     case ToolId::Measure:
         currentTool_ = std::make_unique<MeasureTool>();
         break;

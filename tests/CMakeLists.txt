@@ -5,6 +5,7 @@ add_executable(ApplicationSmokeTests
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
+    ../src/tools/MeasureAreaTool.cpp
     ../src/tools/MeasureTool.cpp
     ../src/tools/PickTool.cpp
     ../src/tools/ToolManager.cpp

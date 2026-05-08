@@ -67,6 +67,7 @@ private:
     QAction *panAction_;
     QAction *pickAction_;
     QAction *measureAction_;
+    QAction *measureAreaAction_;
     QAction *clearMeasureAction_;
     QAction *homeAction_;
     QAction *screenshotAction_;

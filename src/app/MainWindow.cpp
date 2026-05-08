@@ -47,6 +47,11 @@ void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusCont
     statusController->setMeasurementText(u"测距：未开始"_s);
 }
 
+void showMeasureAreaHint(PropertyDock *propertyDock, StatusBarController *statusController) {
+    propertyDock->showText(u"测面：左键添加点，右键或工具栏清空。"_s);
+    statusController->setMeasurementText(u"测面：未开始"_s);
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -108,8 +113,13 @@ MainWindow::MainWindow(QWidget *parent)
     measureAction_->setActionGroup(toolGroup_);
     measureAction_->setToolTip(u"测距工具 (3)"_s);
 
-    clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空测距"_s);
-    clearMeasureAction_->setToolTip(u"清空测距结果 (Esc)"_s);
+    measureAreaAction_ = toolBar->addAction(icons.icon("polygon-regular.svg", 20, toolColor), u"测面"_s);
+    measureAreaAction_->setCheckable(true);
+    measureAreaAction_->setActionGroup(toolGroup_);
+    measureAreaAction_->setToolTip(u"测面工具 (4)"_s);
+
+    clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空量测"_s);
+    clearMeasureAction_->setToolTip(u"清空当前量测结果 (Esc)"_s);
 
     toolBar->addSeparator();
 
@@ -129,6 +139,9 @@ MainWindow::MainWindow(QWidget *parent)
         } else if (action == measureAction_) {
             emit toolChanged(static_cast<int>(ToolId::Measure));
             showMeasureHint(propertyDock_, statusController_);
+        } else if (action == measureAreaAction_) {
+            emit toolChanged(static_cast<int>(ToolId::MeasureArea));
+            showMeasureAreaHint(propertyDock_, statusController_);
         }
     });
 
@@ -267,6 +280,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
         measureAction_->setChecked(true);
         emit toolChanged(static_cast<int>(ToolId::Measure));
         showMeasureHint(propertyDock_, statusController_);
+        return;
+    }
+    if (event->key() == Qt::Key_4 && !event->modifiers()) {
+        measureAreaAction_->setChecked(true);
+        emit toolChanged(static_cast<int>(ToolId::MeasureArea));
+        showMeasureAreaHint(propertyDock_, statusController_);
         return;
     }
     if (event->key() == Qt::Key_Escape && !event->modifiers()) {

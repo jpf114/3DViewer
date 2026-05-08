@@ -55,6 +55,7 @@ add_executable(ThreeDViewer
     src/globe/SceneController.cpp
     src/layers/Layer.cpp
     src/layers/LayerManager.cpp
+    src/tools/MeasureAreaTool.cpp
     src/tools/MeasureTool.cpp
     src/tools/PickTool.cpp
     src/tools/ToolManager.cpp

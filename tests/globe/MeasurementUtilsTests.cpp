@@ -46,5 +46,22 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    const std::vector<globe::MeasurementPoint> square{
+        {0.0, 0.0},
+        {1.0, 0.0},
+        {1.0, 1.0},
+        {0.0, 1.0},
+    };
+    const double squareArea = globe::polygonAreaSquareMeters(square);
+    if (!nearlyEqual(squareArea, 12364000000.0, 300000000.0)) {
+        std::cerr << "Expected one-degree square area near equator to be about 12364 km^2.\n";
+        return EXIT_FAILURE;
+    }
+
+    if (globe::polygonAreaSquareMeters({origin, eastOneDegree}) != 0.0) {
+        std::cerr << "Expected polygon area with fewer than three points to be zero.\n";
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }

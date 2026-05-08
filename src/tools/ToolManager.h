@@ -11,7 +11,8 @@ class QObject;
 enum class ToolId {
     Pan,
     Pick,
-    Measure
+    Measure,
+    MeasureArea
 };
 
 class ToolManager {
