@@ -53,6 +53,17 @@ QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
+QStringList supportedDirectoryImportFilters() {
+    return {
+        "*.shp", "*.SHP",
+        "*.geojson", "*.GEOJSON",
+        "*.gpkg", "*.GPKG",
+        "*.kml", "*.KML",
+        "*.gml", "*.GML",
+        "*.json", "*.JSON"
+    };
+}
+
 }
 
 ApplicationController::ApplicationController(MainWindow &window,
@@ -118,16 +129,15 @@ void ApplicationController::importFile(const std::string &path) {
     const QDir dir(qPath);
 
     if (dir.exists()) {
-        const QStringList shpFilters = QStringList() << "*.shp" << "*.SHP";
-        const QFileInfoList shpEntries = dir.entryInfoList(shpFilters, QDir::Files);
-        if (shpEntries.isEmpty()) {
+        const QFileInfoList vectorEntries = dir.entryInfoList(supportedDirectoryImportFilters(), QDir::Files);
+        if (vectorEntries.isEmpty()) {
             window_.statusBar()->showMessage(u"目录中未找到矢量数据文件。"_s, 3000);
             QMessageBox::warning(&window_, u"导入失败"_s,
                                  QString(u"目录中未找到 Shapefile (.shp) 文件：\n%1"_s)
                                      .arg(qPath));
             return;
         }
-        for (const QFileInfo &fi : shpEntries) {
+        for (const QFileInfo &fi : vectorEntries) {
             pathsToImport.push_back(fi.absoluteFilePath().toUtf8().toStdString());
         }
     } else {

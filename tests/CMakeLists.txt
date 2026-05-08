@@ -92,3 +92,14 @@ target_include_directories(DataImporterTests PRIVATE ../src)
 target_link_libraries(DataImporterTests PRIVATE GDAL::GDAL spdlog::spdlog)
 
 add_test(NAME DataImporterTests COMMAND DataImporterTests)
+
+add_executable(VectorFeatureQueryTests
+    data/VectorFeatureQueryTests.cpp
+    ../src/data/VectorFeatureQuery.cpp
+)
+
+target_compile_options(VectorFeatureQueryTests PRIVATE /utf-8)
+target_include_directories(VectorFeatureQueryTests PRIVATE ../src)
+target_link_libraries(VectorFeatureQueryTests PRIVATE Qt6::Core GDAL::GDAL spdlog::spdlog)
+
+add_test(NAME VectorFeatureQueryTests COMMAND VectorFeatureQueryTests)

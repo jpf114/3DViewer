@@ -60,10 +60,12 @@
 
 #include "data/BasemapUrlTemplate.h"
 #include "data/MapConfig.h"
+#include "data/VectorFeatureQuery.h"
 
 struct SceneController::Impl {
     bool initialized = false;
     HWND hwnd = nullptr;
+    std::unordered_map<std::string, std::shared_ptr<Layer>> appLayers;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
@@ -286,6 +288,8 @@ SceneController::SceneController(SceneController &&) noexcept = default;
 SceneController &SceneController::operator=(SceneController &&) noexcept = default;
 
 void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
+    impl_->appLayers[layer->id()] = layer;
+
     if (impl_->renderLayers.contains(layer->id())) {
         spdlog::warn("SceneController: layer '{}' already in scene, skipping", layer->id());
         return;
@@ -434,17 +438,40 @@ PickResult SceneController::pickAt(int x, int y) const {
 
     for (const auto &[id, sceneLayer] : impl_->renderLayers) {
         auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer.get());
-        if (visibleLayer && visibleLayer->getVisible()) {
-            result.layerId = id;
-            result.displayText = visibleLayer->getName();
-            break;
+        if (!visibleLayer || !visibleLayer->getVisible()) {
+            continue;
         }
+
+        const auto appLayerIt = impl_->appLayers.find(id);
+        if (appLayerIt == impl_->appLayers.end()) {
+            continue;
+        }
+
+        const auto &appLayer = appLayerIt->second;
+        if (!appLayer || appLayer->kind() != LayerKind::Vector) {
+            continue;
+        }
+
+        const auto hit = queryVectorFeatureAt(appLayer->sourceUri(), result.longitude, result.latitude);
+        if (!hit.has_value()) {
+            continue;
+        }
+
+        result.layerId = id;
+        result.displayText = hit->displayText.empty() ? appLayer->name() : hit->displayText;
+        result.featureAttributes.clear();
+        result.featureAttributes.reserve(hit->attributes.size());
+        for (const auto &attr : hit->attributes) {
+            result.featureAttributes.push_back({attr.name, attr.value});
+        }
+        break;
     }
 
     return result;
 }
 
 void SceneController::removeLayer(const std::string &id) {
+    impl_->appLayers.erase(id);
     const auto it = impl_->renderLayers.find(id);
     if (it == impl_->renderLayers.end()) {
         return;

@@ -50,6 +50,7 @@ add_executable(ThreeDViewer
     src/data/GdalDatasetInspector.cpp
     src/data/LayerConfig.cpp
     src/data/MapConfig.cpp
+    src/data/VectorFeatureQuery.cpp
     src/globe/GlobeWidget.cpp
     src/globe/SceneController.cpp
     src/layers/Layer.cpp
