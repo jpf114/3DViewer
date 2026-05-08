@@ -1,0 +1,88 @@
+{
+    "version": "2.0.0",
+    "options": {
+        "env": {
+            "INSTALL_DIR": "${workspaceFolder}/install"
+        }
+    },
+    "tasks": [
+        {
+            "label": "CMake: Configure (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "debug"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Configure (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "release"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Build (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "debug"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "CMake: Build (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "release"],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "CMake: Install (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--install", "build/debug", "--config", "Debug"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Install (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--install", "build/release", "--config", "Release"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Test (Debug)",
+            "type": "shell",
+            "command": "ctest",
+            "args": ["--preset", "debug", "--output-on-failure"],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Test (Release)",
+            "type": "shell",
+            "command": "ctest",
+            "args": ["--preset", "release", "--output-on-failure"],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Install (Debug)",
+            "dependsOn": ["CMake: Build (Debug)", "CMake: Install (Debug)"],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Install (Release)",
+            "dependsOn": ["CMake: Build (Release)", "CMake: Install (Release)"],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

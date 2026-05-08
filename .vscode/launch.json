@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug 3DViewer",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/Debug/3DViewer.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/debug/Debug",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (Debug)"
+        },
+        {
+            "name": "Release 3DViewer",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/release/Release/3DViewer.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/release/Release",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (Release)"
+        },
+        {
+            "name": "Install & Run 3DViewer",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/install/3DViewer.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/install",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Build & Install (Release)"
+        }
+    ]
+}

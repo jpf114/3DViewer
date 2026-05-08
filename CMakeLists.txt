@@ -63,7 +63,7 @@ add_executable(ThreeDViewer
 set_target_properties(ThreeDViewer PROPERTIES OUTPUT_NAME 3DViewer)
 
 if(MSVC)
-    target_compile_options(ThreeDViewer PRIVATE /utf-8 /W4 /WX- /wd4819)
+    target_compile_options(ThreeDViewer PRIVATE /utf-8 /EHa /W4 /WX- /wd4819)
     target_compile_definitions(ThreeDViewer PRIVATE
         _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING
         _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS

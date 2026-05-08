@@ -1,0 +1,38 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "architecture": { "value": "x64", "strategy": "set" },
+            "toolset": { "value": "host=x64", "strategy": "set" },
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
+                "VCPKG_MANIFEST_MODE": "OFF"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build/debug"
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build/release"
+        }
+    ],
+    "buildPresets": [
+        { "name": "debug",   "configurePreset": "debug",   "configuration": "Debug" },
+        { "name": "release", "configurePreset": "release", "configuration": "Release" }
+    ],
+    "testPresets": [
+        { "name": "debug",   "configurePreset": "debug",   "configuration": "Debug" },
+        { "name": "release", "configurePreset": "release", "configuration": "Release" }
+    ]
+}

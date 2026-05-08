@@ -1,10 +1,14 @@
 #include <QApplication>
 #include <QFile>
 #include <QString>
+#include <stdexcept>
+#include <string>
 
 #if defined(Q_OS_WIN)
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
+#include <eh.h>
 #include <filesystem>
 #endif
 
@@ -18,9 +22,22 @@
 #include "ui/IconManager.h"
 
 #if defined(Q_OS_WIN)
+static void seTranslator(unsigned int code, EXCEPTION_POINTERS * /*ep*/) {
+    switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION:
+        throw std::runtime_error("Access Violation (SEH)");
+    case EXCEPTION_STACK_OVERFLOW:
+        throw std::runtime_error("Stack Overflow (SEH)");
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        throw std::runtime_error("Divide by Zero (SEH)");
+    default:
+        throw std::runtime_error("Structured Exception: " + std::to_string(code));
+    }
+}
+
 static void setupWindowsRuntimeEnvironment() {
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
-        qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("windows:dpiawareness=1"));
+        qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("windows"));
     }
     if (qEnvironmentVariableIsEmpty("FONTCONFIG_FILE")) {
         wchar_t module[MAX_PATH];
@@ -68,6 +85,8 @@ static void loadStyleSheet(QApplication &app) {
 
 int main(int argc, char *argv[]) {
 #if defined(Q_OS_WIN)
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    _set_se_translator(seTranslator);
     setupWindowsRuntimeEnvironment();
 #endif
     QApplication app(argc, argv);

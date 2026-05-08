@@ -1,5 +1,11 @@
 #include "globe/SceneController.h"
 
+#if defined(Q_OS_WIN)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
+
 #include <osg/Camera>
 #include <osg/GraphicsContext>
 #include <osg/Image>
@@ -41,11 +47,12 @@
 #include "globe/PickResult.h"
 #include "layers/Layer.h"
 
-#include <osgEarth/FeatureSourceIndexNode>
+
 #include <osgEarth/Registry>
 
 struct SceneController::Impl {
     bool initialized = false;
+    HWND hwnd = nullptr;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
     osg::ref_ptr<osgEarth::Map> map;
@@ -146,17 +153,6 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         featureLayer->setName(layer.name());
         featureLayer->setFeatureSource(featureSource.get());
         featureLayer->setStyleSheet(styleSheet.get());
-
-        try {
-            featureSource->open();
-        } catch (const std::exception &ex) {
-            spdlog::error("SceneController: failed to open feature source '{}': {}", layer.sourceUri(), ex.what());
-            return nullptr;
-        } catch (...) {
-            spdlog::error("SceneController: failed to open feature source '{}': unknown error", layer.sourceUri());
-            return nullptr;
-        }
-
         return featureLayer;
     }
     case LayerKind::Chart:
@@ -238,48 +234,17 @@ void SceneController::reorderUserLayers(const std::vector<std::shared_ptr<Layer>
     impl_->map->endUpdate();
 }
 
-void SceneController::attachToNativeWindow(void *windowHandle, int width, int height) {
-    if (!impl_->viewer || windowHandle == nullptr || width <= 0 || height <= 0) {
-        return;
-    }
-
-    if (!impl_->graphicsWindow) {
-        auto traits = osg::ref_ptr<osg::GraphicsContext::Traits>(new osg::GraphicsContext::Traits());
-        traits->x = 0;
-        traits->y = 0;
-        traits->width = width;
-        traits->height = height;
-        traits->windowDecoration = false;
-        traits->doubleBuffer = true;
-        traits->sharedContext = nullptr;
-        traits->inheritedWindowData =
-            new osgViewer::GraphicsWindowWin32::WindowData(static_cast<HWND>(windowHandle), false);
-
-        auto graphicsWindow = osg::ref_ptr<osgViewer::GraphicsWindowWin32>(new osgViewer::GraphicsWindowWin32(traits.get()));
-        if (!graphicsWindow->valid()) {
-            return;
-        }
-
-        impl_->graphicsWindow = graphicsWindow.get();
-        impl_->viewer->getCamera()->setGraphicsContext(graphicsWindow.get());
-        impl_->viewer->getCamera()->setViewport(new osg::Viewport(0, 0, width, height));
-        impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
-            kDefaultFovDegrees,
-            height > 0 ? static_cast<double>(width) / static_cast<double>(height) : 1.0,
-            kDefaultNearPlane,
-            kDefaultFarPlane);
-        impl_->viewer->realize();
-    }
-
-    resize(width, height);
-}
-
 void SceneController::frame() {
     if (!impl_->viewer) {
         return;
     }
 
-    impl_->viewer->frame();
+    __try {
+        impl_->viewer->frame();
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        spdlog::error("SceneController::frame caught SEH exception (code={:#x})",
+                     GetExceptionCode());
+    }
 }
 
 bool SceneController::hasBaseLayer() const {
@@ -390,12 +355,26 @@ std::size_t SceneController::renderedLayerCount() const {
     return impl_->renderLayers.size();
 }
 
-void SceneController::resize(int width, int height) {
-    if (!impl_->viewer || !impl_->graphicsWindow || width <= 0 || height <= 0) {
+void SceneController::resize(int /*width*/, int /*height*/) {
+    if (!impl_->viewer || !impl_->graphicsWindow) {
         return;
     }
 
-    updateViewport(*impl_->viewer, *impl_->graphicsWindow, width, height);
+    int pixelW = 1;
+    int pixelH = 1;
+    if (impl_->hwnd) {
+        RECT rc{};
+        if (GetClientRect(impl_->hwnd, &rc)) {
+            pixelW = (std::max)(1, static_cast<int>(rc.right - rc.left));
+            pixelH = (std::max)(1, static_cast<int>(rc.bottom - rc.top));
+        }
+    }
+
+    if (pixelW <= 1 && pixelH <= 1) {
+        return;
+    }
+
+    updateViewport(*impl_->viewer, *impl_->graphicsWindow, pixelW, pixelH);
 }
 
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
@@ -495,7 +474,8 @@ void SceneController::flyToGeographicBounds(const GeographicBounds &bounds, doub
 }
 
 void SceneController::initializeDefaultScene(int width, int height) {
-    if (impl_->initialized) {
+    spdlog::info("SceneController::initializeDefaultScene width={} height={}", width, height);
+    if (!impl_ || impl_->initialized) {
         return;
     }
 
@@ -519,8 +499,62 @@ void SceneController::initializeDefaultScene(int width, int height) {
     }
 
     impl_->initialized = true;
-    spdlog::info("SceneController: default scene initialized");
+    spdlog::info("SceneController: default scene initialized (graphics window deferred)");
     flushPendingLayers();
+}
+
+void SceneController::attachToNativeWindow(void *windowHandle, int width, int height) {
+    if (!impl_->viewer || windowHandle == nullptr || width <= 0 || height <= 0) {
+        return;
+    }
+
+    const auto hwnd = static_cast<HWND>(windowHandle);
+
+    if (!impl_->graphicsWindow) {
+        RECT rc{};
+        int pixelW = width;
+        int pixelH = height;
+        if (GetClientRect(hwnd, &rc)) {
+            pixelW = rc.right - rc.left;
+            pixelH = rc.bottom - rc.top;
+            if (pixelW <= 0) pixelW = width;
+            if (pixelH <= 0) pixelH = height;
+        }
+
+        auto traits = osg::ref_ptr<osg::GraphicsContext::Traits>(new osg::GraphicsContext::Traits());
+        traits->x = 0;
+        traits->y = 0;
+        traits->width = pixelW;
+        traits->height = pixelH;
+        traits->windowDecoration = false;
+        traits->doubleBuffer = true;
+        traits->sharedContext = nullptr;
+        traits->inheritedWindowData =
+            new osgViewer::GraphicsWindowWin32::WindowData(hwnd, true);
+
+        auto graphicsWindow = osg::ref_ptr<osgViewer::GraphicsWindowWin32>(new osgViewer::GraphicsWindowWin32(traits.get()));
+        if (!graphicsWindow->valid()) {
+            spdlog::warn("SceneController: GraphicsWindowWin32 validation failed for HWND {}",
+                         reinterpret_cast<ptrdiff_t>(windowHandle));
+            return;
+        }
+
+        impl_->hwnd = hwnd;
+        impl_->graphicsWindow = graphicsWindow.get();
+        impl_->viewer->getCamera()->setGraphicsContext(graphicsWindow.get());
+        impl_->viewer->getCamera()->setViewport(new osg::Viewport(0, 0, pixelW, pixelH));
+        impl_->viewer->getCamera()->setProjectionMatrixAsPerspective(
+            kDefaultFovDegrees,
+            pixelH > 0 ? static_cast<double>(pixelW) / static_cast<double>(pixelH) : 1.0,
+            kDefaultNearPlane,
+            kDefaultFarPlane);
+        impl_->viewer->realize();
+        spdlog::info("SceneController: GraphicsWindowWin32 created, logical={}x{} pixel={}x{}", width, height, pixelW, pixelH);
+    }
+
+    const int sceneWidth = (std::max)(1, width);
+    const int sceneHeight = (std::max)(1, height);
+    resize(sceneWidth, sceneHeight);
 }
 
 void SceneController::flushPendingLayers() {

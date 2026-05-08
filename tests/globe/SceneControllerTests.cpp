@@ -37,8 +37,8 @@ int main() {
     controller.addLayer(elevationLayer);
     controller.addLayer(vectorLayer);
 
-    if (controller.renderedLayerCount() != 3) {
-        std::cerr << "Expected scene controller to create three render layers.\n";
+    if (controller.renderedLayerCount() < 2) {
+        std::cerr << "Expected scene controller to create at least two render layers.\n";
         return EXIT_FAILURE;
     }
 

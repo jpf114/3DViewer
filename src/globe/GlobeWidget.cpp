@@ -7,8 +7,6 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <QWheelEvent>
-#include <QScreen>
-#include <QWindow>
 
 using namespace Qt::Literals::StringLiterals;
 
@@ -22,13 +20,6 @@ unsigned int mapQtButton(Qt::MouseButton button) {
     if (button == Qt::MiddleButton) return 2;
     if (button == Qt::RightButton) return 3;
     return 0;
-}
-
-qreal getDevicePixelRatio(const QWidget *widget) {
-    if (widget && widget->windowHandle()) {
-        return widget->windowHandle()->devicePixelRatio();
-    }
-    return widget ? widget->devicePixelRatioF() : 1.0;
 }
 
 }
@@ -62,9 +53,8 @@ ToolManager &GlobeWidget::toolManager() {
 }
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
-    const qreal dpr = getDevicePixelRatio(this);
-    const float fx = static_cast<float>(event->position().x() * dpr);
-    const float fy = static_cast<float>(event->position().y() * dpr);
+    const float fx = static_cast<float>(event->position().x());
+    const float fy = static_cast<float>(event->position().y());
     sceneController_.mouseMove(fx, fy);
 
     lastPickX_ = static_cast<int>(fx);
@@ -78,12 +68,11 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void GlobeWidget::mousePressEvent(QMouseEvent *event) {
-    const qreal dpr = getDevicePixelRatio(this);
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
         sceneController_.mousePress(
-            static_cast<float>(event->position().x() * dpr),
-            static_cast<float>(event->position().y() * dpr),
+            static_cast<float>(event->position().x()),
+            static_cast<float>(event->position().y()),
             button);
     }
     toolManager().mousePressEvent(*this, event);
@@ -91,12 +80,11 @@ void GlobeWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
-    const qreal dpr = getDevicePixelRatio(this);
     const unsigned int button = mapQtButton(event->button());
     if (button != 0) {
         sceneController_.mouseRelease(
-            static_cast<float>(event->position().x() * dpr),
-            static_cast<float>(event->position().y() * dpr),
+            static_cast<float>(event->position().x()),
+            static_cast<float>(event->position().y()),
             button);
     }
     toolManager().mouseReleaseEvent(*this, event);
@@ -109,24 +97,20 @@ void GlobeWidget::wheelEvent(QWheelEvent *event) {
 }
 
 void GlobeWidget::resizeEvent(QResizeEvent *event) {
-    const qreal dpr = getDevicePixelRatio(this);
-    const int pw = static_cast<int>(event->size().width() * dpr);
-    const int ph = static_cast<int>(event->size().height() * dpr);
-    sceneController_.resize((std::max)(1, pw), (std::max)(1, ph));
+    sceneController_.resize(event->size().width(), event->size().height());
     QWidget::resizeEvent(event);
 }
 
 void GlobeWidget::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
 
-    const qreal dpr = getDevicePixelRatio(this);
-    const int pw = static_cast<int>((std::max)(1, width()) * dpr);
-    const int ph = static_cast<int>((std::max)(1, height()) * dpr);
+    const int sceneWidth = (std::max)(1, width());
+    const int sceneHeight = (std::max)(1, height());
     if (!sceneController_.isInitialized()) {
-        sceneController_.initializeDefaultScene(pw, ph);
+        sceneController_.initializeDefaultScene(sceneWidth, sceneHeight);
     }
 
-    sceneController_.attachToNativeWindow(reinterpret_cast<void *>(winId()), pw, ph);
+    sceneController_.attachToNativeWindow(reinterpret_cast<void *>(winId()), sceneWidth, sceneHeight);
     if (!frameTimer_->isActive()) {
         frameTimer_->start();
     }
