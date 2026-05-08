@@ -32,6 +32,24 @@ bool verifyKind(DataImporter &importer,
     return true;
 }
 
+bool verifyUnsupported(DataImporter &importer,
+                       DataSourceKind descriptorKind,
+                       const char *label) {
+    const DataSourceDescriptor descriptor{
+        "sample-id",
+        label,
+        "memory://sample",
+        descriptorKind,
+    };
+
+    if (importer.import(descriptor)) {
+        std::cerr << "Expected importer to reject unsupported kind for " << label << ".\n";
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -54,11 +72,11 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    if (!verifyKind(importer, DataSourceKind::Chart, LayerKind::Chart, "chart")) {
+    if (!verifyUnsupported(importer, DataSourceKind::Chart, "chart")) {
         return EXIT_FAILURE;
     }
 
-    if (!verifyKind(importer, DataSourceKind::Scientific, LayerKind::Scientific, "scientific")) {
+    if (!verifyUnsupported(importer, DataSourceKind::Scientific, "scientific")) {
         return EXIT_FAILURE;
     }
 

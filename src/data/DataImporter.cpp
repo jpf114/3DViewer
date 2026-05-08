@@ -3,11 +3,44 @@
 #include <memory>
 #include <spdlog/spdlog.h>
 
-#include "layers/ChartLayer.h"
 #include "layers/ElevationLayer.h"
 #include "layers/ImageryLayer.h"
-#include "layers/ScientificLayer.h"
 #include "layers/VectorLayer.h"
+
+namespace {
+
+bool isRenderableDataSourceKind(DataSourceKind kind) {
+    switch (kind) {
+    case DataSourceKind::RasterImagery:
+    case DataSourceKind::RasterElevation:
+    case DataSourceKind::Vector:
+        return true;
+    case DataSourceKind::Chart:
+    case DataSourceKind::Scientific:
+        return false;
+    }
+
+    return false;
+}
+
+const char *dataSourceKindName(DataSourceKind kind) {
+    switch (kind) {
+    case DataSourceKind::RasterImagery:
+        return "RasterImagery";
+    case DataSourceKind::RasterElevation:
+        return "RasterElevation";
+    case DataSourceKind::Vector:
+        return "Vector";
+    case DataSourceKind::Chart:
+        return "Chart";
+    case DataSourceKind::Scientific:
+        return "Scientific";
+    }
+
+    return "Unknown";
+}
+
+} // namespace
 
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
     const auto descriptor = inspector_.inspect(path);
@@ -20,6 +53,12 @@ std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
 }
 
 std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descriptor) const {
+    if (!isRenderableDataSourceKind(descriptor.kind)) {
+        spdlog::warn("DataImporter: unsupported render kind '{}' for '{}'",
+                     dataSourceKindName(descriptor.kind), descriptor.path);
+        return nullptr;
+    }
+
     std::shared_ptr<Layer> layer;
     switch (descriptor.kind) {
     case DataSourceKind::RasterImagery:
@@ -32,10 +71,7 @@ std::shared_ptr<Layer> DataImporter::import(const DataSourceDescriptor &descript
         layer = std::make_shared<VectorLayer>(descriptor.id, descriptor.name, descriptor.path);
         break;
     case DataSourceKind::Chart:
-        layer = std::make_shared<ChartLayer>(descriptor.id, descriptor.name, descriptor.path);
-        break;
     case DataSourceKind::Scientific:
-        layer = std::make_shared<ScientificLayer>(descriptor.id, descriptor.name, descriptor.path);
         break;
     }
 

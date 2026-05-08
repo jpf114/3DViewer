@@ -64,6 +64,29 @@ QStringList supportedDirectoryImportFilters() {
     };
 }
 
+bool isRenderableLayerKind(LayerKind kind) {
+    switch (kind) {
+    case LayerKind::Imagery:
+    case LayerKind::Elevation:
+    case LayerKind::Vector:
+        return true;
+    case LayerKind::Chart:
+    case LayerKind::Scientific:
+        return false;
+    }
+
+    return false;
+}
+
+std::optional<LayerKind> parseLayerKind(const std::string &kind) {
+    if (kind == "imagery") return LayerKind::Imagery;
+    if (kind == "elevation") return LayerKind::Elevation;
+    if (kind == "vector") return LayerKind::Vector;
+    if (kind == "chart") return LayerKind::Chart;
+    if (kind == "scientific") return LayerKind::Scientific;
+    return std::nullopt;
+}
+
 }
 
 ApplicationController::ApplicationController(MainWindow &window,
@@ -347,6 +370,13 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
 
     for (const auto &entry : layerConfig->layers) {
         if (!entry.autoload) continue;
+
+        if (const auto kind = parseLayerKind(entry.kind); kind.has_value() && !isRenderableLayerKind(*kind)) {
+            spdlog::warn("ApplicationController: skipping unsupported persisted layer '{}' kind={}", entry.id, entry.kind);
+            window_.statusBar()->showMessage(
+                QString(u"宸茶烦杩囨湭鏀寔鐨勬寔涔呭寲鍥惧眰锛?1"_s).arg(QString::fromStdString(entry.name)), 5000);
+            continue;
+        }
 
         std::string resolvedPath = entry.path;
         if (!resolvedPath.empty() && !(resolvedPath.size() >= 2 && resolvedPath[1] == ':') && resolvedPath[0] != '/' && resolvedPath[0] != '\\') {
