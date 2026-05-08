@@ -11,7 +11,9 @@ class StatusBarController : public QObject {
 public:
     explicit StatusBarController(QMainWindow *window);
     void setCursorText(const QString &text);
+    void setMeasurementText(const QString &text);
 
 private:
     QLabel *cursorLabel_;
+    QLabel *measurementLabel_;
 };

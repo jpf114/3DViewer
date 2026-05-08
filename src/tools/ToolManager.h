@@ -10,7 +10,8 @@ class QObject;
 
 enum class ToolId {
     Pan,
-    Pick
+    Pick,
+    Measure
 };
 
 class ToolManager {
@@ -23,6 +24,7 @@ public:
     void mouseMoveEvent(GlobeWidget &widget, QMouseEvent *event);
     void mousePressEvent(GlobeWidget &widget, QMouseEvent *event);
     void mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event);
+    void clearActiveToolState(GlobeWidget &widget);
 
 private:
     QObject *parent_;

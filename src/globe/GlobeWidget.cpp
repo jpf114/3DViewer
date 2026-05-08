@@ -60,6 +60,13 @@ ToolManager &GlobeWidget::toolManager() {
     return *toolManager_;
 }
 
+PickResult GlobeWidget::pickAt(const QPointF &logicalPos) const {
+    const QPointF scenePos = globe::mapToScenePoint(logicalPos, size(), pixelSceneSize(*this));
+    return sceneController_.pickAt(
+        static_cast<int>(std::lround(scenePos.x())),
+        static_cast<int>(std::lround(scenePos.y())));
+}
+
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
     const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
     sceneController_.mouseMove(static_cast<float>(scenePos.x()), static_cast<float>(scenePos.y()));

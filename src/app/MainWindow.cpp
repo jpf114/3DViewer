@@ -41,7 +41,13 @@ bool splitKeyValue(const QString &line, QString *key, QString *value) {
     *value = line.mid(separator + 1).trimmed();
     return true;
 }
+
+void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusController) {
+    propertyDock->showText(u"测距：左键添加点，右键或工具栏清空。"_s);
+    statusController->setMeasurementText(u"测距：未开始"_s);
 }
+
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -97,6 +103,14 @@ MainWindow::MainWindow(QWidget *parent)
     pickAction_->setActionGroup(toolGroup_);
     pickAction_->setToolTip(u"拾取工具 (2)"_s);
 
+    measureAction_ = toolBar->addAction(icons.icon("ruler-regular.svg", 20, toolColor), u"测距"_s);
+    measureAction_->setCheckable(true);
+    measureAction_->setActionGroup(toolGroup_);
+    measureAction_->setToolTip(u"测距工具 (3)"_s);
+
+    clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空测距"_s);
+    clearMeasureAction_->setToolTip(u"清空测距结果 (Esc)"_s);
+
     toolBar->addSeparator();
 
     homeAction_ = toolBar->addAction(icons.icon("arrows-clockwise-regular.svg", 20, toolColor), u"归位"_s);
@@ -112,6 +126,9 @@ MainWindow::MainWindow(QWidget *parent)
             emit toolChanged(static_cast<int>(ToolId::Pan));
         } else if (action == pickAction_) {
             emit toolChanged(static_cast<int>(ToolId::Pick));
+        } else if (action == measureAction_) {
+            emit toolChanged(static_cast<int>(ToolId::Measure));
+            showMeasureHint(propertyDock_, statusController_);
         }
     });
 
@@ -123,6 +140,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);
     connect(propertyDock_, &PropertyDock::bandMappingChanged, this, &MainWindow::bandMappingChanged);
     connect(globeWidget_, &GlobeWidget::cursorTextChanged, statusController_, &StatusBarController::setCursorText);
+    connect(globeWidget_, &GlobeWidget::measurementTextChanged, this, [this](const QString &text) {
+        propertyDock_->showText(text);
+    });
+    connect(globeWidget_, &GlobeWidget::measurementStatusChanged, statusController_, &StatusBarController::setMeasurementText);
+    connect(clearMeasureAction_, &QAction::triggered, this, [this]() {
+        globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
+    });
     propertyDock_->showText(u"未选择图层。"_s);
 }
 
@@ -237,6 +261,16 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_2 && !event->modifiers()) {
         pickAction_->setChecked(true);
         emit toolChanged(static_cast<int>(ToolId::Pick));
+        return;
+    }
+    if (event->key() == Qt::Key_3 && !event->modifiers()) {
+        measureAction_->setChecked(true);
+        emit toolChanged(static_cast<int>(ToolId::Measure));
+        showMeasureHint(propertyDock_, statusController_);
+        return;
+    }
+    if (event->key() == Qt::Key_Escape && !event->modifiers()) {
+        globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
         return;
     }
     if (event->key() == Qt::Key_Delete && !event->modifiers()) {

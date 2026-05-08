@@ -17,10 +17,13 @@ public:
 
     SceneController &sceneController();
     ToolManager &toolManager();
+    PickResult pickAt(const QPointF &logicalPos) const;
 
 signals:
     void cursorTextChanged(const QString &text);
     void terrainPickCompleted(const PickResult &result);
+    void measurementTextChanged(const QString &text);
+    void measurementStatusChanged(const QString &text);
 
 protected:
     void mouseMoveEvent(QMouseEvent *event) override;

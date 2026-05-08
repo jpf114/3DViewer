@@ -1,3 +1,4 @@
+#include "tools/MeasureTool.h"
 #include "tools/ToolManager.h"
 
 #include "tools/PanTool.h"
@@ -13,6 +14,9 @@ void ToolManager::setActiveTool(ToolId toolId) {
 
     currentToolId_ = toolId;
     switch (toolId) {
+    case ToolId::Measure:
+        currentTool_ = std::make_unique<MeasureTool>();
+        break;
     case ToolId::Pick:
         currentTool_ = std::make_unique<PickTool>();
         break;
@@ -37,4 +41,8 @@ void ToolManager::mousePressEvent(GlobeWidget &widget, QMouseEvent *event) {
 
 void ToolManager::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
     currentTool_->mouseReleaseEvent(widget, event);
+}
+
+void ToolManager::clearActiveToolState(GlobeWidget &widget) {
+    currentTool_->clear(widget);
 }

@@ -66,6 +66,8 @@ private:
     StatusBarController *statusController_;
     QAction *panAction_;
     QAction *pickAction_;
+    QAction *measureAction_;
+    QAction *clearMeasureAction_;
     QAction *homeAction_;
     QAction *screenshotAction_;
     QActionGroup *toolGroup_;

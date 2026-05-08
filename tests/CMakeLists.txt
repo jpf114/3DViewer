@@ -5,6 +5,7 @@ add_executable(ApplicationSmokeTests
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
+    ../src/tools/MeasureTool.cpp
     ../src/tools/PickTool.cpp
     ../src/tools/ToolManager.cpp
     ../src/ui/IconManager.cpp
@@ -38,6 +39,15 @@ target_include_directories(InputMappingTests PRIVATE ../src)
 target_link_libraries(InputMappingTests PRIVATE Qt6::Core)
 
 add_test(NAME InputMappingTests COMMAND InputMappingTests)
+
+add_executable(MeasurementUtilsTests
+    globe/MeasurementUtilsTests.cpp
+)
+
+target_include_directories(MeasurementUtilsTests PRIVATE ../src)
+target_link_libraries(MeasurementUtilsTests PRIVATE Qt6::Core)
+
+add_test(NAME MeasurementUtilsTests COMMAND MeasurementUtilsTests)
 
 add_executable(LayerManagerTests
     layers/LayerManagerTests.cpp
