@@ -264,6 +264,10 @@ void MainWindow::addLayerRow(const Layer &layer) {
     layerDock_->addLayer(layer.id(), layer.name(), layer.visible(), layer.kind());
 }
 
+void MainWindow::renameLayerRow(const std::string &layerId, const std::string &name) {
+    layerDock_->renameLayer(layerId, name);
+}
+
 void MainWindow::removeLayerRow(const std::string &layerId) {
     layerDock_->removeLayer(layerId);
 }

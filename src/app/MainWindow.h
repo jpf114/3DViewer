@@ -29,6 +29,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     GlobeWidget *globeWidget() const;
     void addLayerRow(const Layer &layer);
+    void renameLayerRow(const std::string &layerId, const std::string &name);
     void removeLayerRow(const std::string &layerId);
     void selectLayerRow(const std::string &layerId);
     void clearLayerSelection();

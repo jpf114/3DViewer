@@ -13,6 +13,7 @@ class LayerTreeDock : public QDockWidget {
 public:
     explicit LayerTreeDock(QWidget *parent = nullptr);
     void addLayer(const std::string &id, const std::string &name, bool visible, LayerKind kind);
+    void renameLayer(const std::string &id, const std::string &name);
     void removeLayer(const std::string &id);
     void selectLayer(const std::string &id);
     void clearSelection();

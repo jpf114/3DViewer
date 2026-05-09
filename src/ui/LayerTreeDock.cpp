@@ -142,6 +142,21 @@ void LayerTreeDock::addLayer(const std::string &id, const std::string &name, boo
     tree_->addTopLevelItem(item);
 }
 
+void LayerTreeDock::renameLayer(const std::string &id, const std::string &name) {
+    const QString qId = QString::fromUtf8(id.c_str(), static_cast<int>(id.size()));
+    const QString qName = QString::fromUtf8(name.c_str(), static_cast<int>(name.size()));
+    for (int i = 0; i < tree_->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *item = tree_->topLevelItem(i);
+        if (item == nullptr || isPlaceholderItem(item)) {
+            continue;
+        }
+        if (item->data(0, kLayerIdRole).toString() == qId) {
+            item->setText(0, qName);
+            return;
+        }
+    }
+}
+
 QString LayerTreeDock::currentLayerId() const {
     QTreeWidgetItem *current = tree_->currentItem();
     if (current == nullptr || isPlaceholderItem(current)) {

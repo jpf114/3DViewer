@@ -114,6 +114,20 @@ QString measurementLayerBaseName(MeasurementKind kind) {
         : QString::fromUtf8(u8"测距结果");
 }
 
+QString formatMeasurementDistance(double meters) {
+    if (meters >= 1000.0) {
+        return QString::fromUtf8(u8"%1 km").arg(meters / 1000.0, 0, 'f', 3);
+    }
+    return QString::fromUtf8(u8"%1 m").arg(meters, 0, 'f', 1);
+}
+
+QString formatMeasurementArea(double squareMeters) {
+    if (squareMeters >= 1000000.0) {
+        return QString::fromUtf8(u8"%1 km²").arg(squareMeters / 1000000.0, 0, 'f', 3);
+    }
+    return QString::fromUtf8(u8"%1 m²").arg(squareMeters, 0, 'f', 1);
+}
+
 int nextMeasurementIndex(const LayerManager &layerManager, MeasurementKind kind) {
     int count = 0;
     for (const auto &layer : layerManager.layers()) {
@@ -127,6 +141,43 @@ int nextMeasurementIndex(const LayerManager &layerManager, MeasurementKind kind)
         ++count;
     }
     return count + 1;
+}
+
+int measurementDisplayIndex(const LayerManager &layerManager, const Layer &layer, MeasurementKind kind) {
+    int count = 0;
+    for (const auto &existingLayer : layerManager.layers()) {
+        if (!existingLayer || existingLayer->kind() != LayerKind::Measurement) {
+            continue;
+        }
+        const auto measurementData = existingLayer->measurementData();
+        if (!measurementData.has_value() || measurementData->kind != kind) {
+            continue;
+        }
+        ++count;
+        if (existingLayer->id() == layer.id()) {
+            return count;
+        }
+    }
+    return nextMeasurementIndex(layerManager, kind);
+}
+
+QString measurementLayerSummary(const MeasurementLayerData &data) {
+    return data.kind == MeasurementKind::Area
+        ? formatMeasurementArea(data.areaSquareMeters)
+        : formatMeasurementDistance(data.lengthMeters);
+}
+
+QString measurementLayerDisplayName(MeasurementKind kind, int index, const MeasurementLayerData &data) {
+    return QString::fromUtf8(u8"%1 %2（%3）")
+        .arg(measurementLayerBaseName(kind))
+        .arg(index)
+        .arg(measurementLayerSummary(data));
+}
+
+QString measurementLayerDisplayName(const LayerManager &layerManager,
+                                    const Layer &layer,
+                                    const MeasurementLayerData &data) {
+    return measurementLayerDisplayName(data.kind, measurementDisplayIndex(layerManager, layer, data.kind), data);
 }
 
 std::optional<GeographicBounds> measurementBounds(const MeasurementLayerData &data) {
@@ -502,12 +553,14 @@ bool ApplicationController::updateMeasurementLayer(const std::shared_ptr<Layer> 
     MeasurementLayerData storedData = data;
     storedData.targetLayerId.clear();
     layer->setMeasurementData(storedData);
+    layer->setName(measurementLayerDisplayName(layerManager_, *layer, storedData).toUtf8().toStdString());
     if (const auto bounds = measurementBounds(storedData); bounds.has_value()) {
         layer->setGeographicBounds(*bounds);
     }
 
     sceneController_.removeLayer(layer->id());
     sceneController_.addLayer(layer);
+    window_.renameLayerRow(layer->id(), layer->name());
     return true;
 }
 
@@ -543,9 +596,7 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
         return;
     }
 
-    const QString layerName = QString("%1 %2")
-        .arg(measurementLayerBaseName(data.kind))
-        .arg(nextMeasurementIndex(layerManager_, data.kind));
+    const QString layerName = measurementLayerDisplayName(data.kind, nextMeasurementIndex(layerManager_, data.kind), data);
 
     auto layer = std::make_shared<Layer>(
         layerId.toStdString(),

@@ -11,6 +11,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMetaObject>
 #include <QTemporaryDir>
 #include <QTableWidget>
 #include <QTextEdit>
@@ -280,6 +281,11 @@ int main(int argc, char **argv) {
     if (!require(tree->topLevelItemCount() == 1, "adding first layer should replace placeholder")) {
         return EXIT_FAILURE;
     }
+    layerDock.renameLayer("measurement-1", "Measure 1 (1.234 km)");
+    if (!require(tree->topLevelItem(0)->text(0) == "Measure 1 (1.234 km)",
+                 "renameLayer should update visible layer text")) {
+        return EXIT_FAILURE;
+    }
     layerDock.selectLayer("measurement-1");
     if (!require(layerDock.currentLayerId() == "measurement-1", "selectLayer should focus the real layer item")) {
         return EXIT_FAILURE;
@@ -508,6 +514,74 @@ int main(int argc, char **argv) {
     batchController.importFile(batchImportDir.path().toStdString());
     if (!require(batchLayerManager.layers().size() == 2,
                  "batch import should continue past duplicate entries and import remaining files")) {
+        return EXIT_FAILURE;
+    }
+
+    MainWindow measurementWindow;
+    LayerManager measurementLayerManager;
+    DataImporter measurementImporter;
+    ApplicationController measurementController(
+        measurementWindow,
+        measurementWindow.globeWidget()->sceneController(),
+        measurementLayerManager,
+        measurementImporter);
+
+    MeasurementLayerData committedMeasurement;
+    committedMeasurement.kind = MeasurementKind::Distance;
+    committedMeasurement.points.push_back({120.0, 30.0});
+    committedMeasurement.points.push_back({121.0, 31.0});
+    committedMeasurement.lengthMeters = 1234.0;
+
+    const bool commitAdded = QMetaObject::invokeMethod(
+        measurementWindow.globeWidget(),
+        "measurementCommitted",
+        Qt::DirectConnection,
+        Q_ARG(MeasurementLayerData, committedMeasurement));
+    if (!require(commitAdded, "measurement commit signal should be invokable in smoke test")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementLayerManager.layers().size() == 1,
+                 "committing a measurement should create one measurement layer")) {
+        return EXIT_FAILURE;
+    }
+    const auto committedLayer = measurementLayerManager.layers().front();
+    if (!require(committedLayer->name().find("1.234 km") != std::string::npos,
+                 "new measurement layer name should include distance summary")) {
+        return EXIT_FAILURE;
+    }
+    auto *measurementTree = measurementWindow.findChild<QTreeWidget *>();
+    if (!require(measurementTree != nullptr && measurementTree->topLevelItemCount() == 1,
+                 "measurement layer should appear in layer tree")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementTree->topLevelItem(0)->text(0).contains("1.234 km"),
+                 "layer tree should show measurement summary in layer name")) {
+        return EXIT_FAILURE;
+    }
+
+    MeasurementLayerData editedMeasurement = committedMeasurement;
+    editedMeasurement.targetLayerId = committedLayer->id();
+    editedMeasurement.points.push_back({122.0, 32.0});
+    editedMeasurement.lengthMeters = 2500.0;
+
+    const bool commitEdited = QMetaObject::invokeMethod(
+        measurementWindow.globeWidget(),
+        "measurementCommitted",
+        Qt::DirectConnection,
+        Q_ARG(MeasurementLayerData, editedMeasurement));
+    if (!require(commitEdited, "editing a measurement should reuse measurement commit signal")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementLayerManager.layers().size() == 1,
+                 "editing a measurement should update existing layer instead of creating another one")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(committedLayer->name().find("2.500 km") != std::string::npos,
+                 "edited measurement layer name should refresh its distance summary")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementTree->topLevelItem(0)->text(0).contains("2.500 km"),
+                 "layer tree should refresh measurement summary after editing")) {
         return EXIT_FAILURE;
     }
 
