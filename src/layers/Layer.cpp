@@ -33,6 +33,14 @@ double Layer::opacity() const {
     return opacity_;
 }
 
+void Layer::setId(std::string id) {
+    id_ = std::move(id);
+}
+
+void Layer::setName(std::string name) {
+    name_ = std::move(name);
+}
+
 void Layer::setVisible(bool visible) {
     visible_ = visible;
 }

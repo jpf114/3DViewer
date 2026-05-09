@@ -679,6 +679,13 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
             continue;
         }
 
+        if (!entry.id.empty()) {
+            layer->setId(entry.id);
+        }
+        if (!entry.name.empty()) {
+            layer->setName(entry.name);
+        }
+
         if (!layerManager_.addLayer(layer)) {
             spdlog::warn("ApplicationController: duplicate persisted layer '{}'", entry.id);
             continue;

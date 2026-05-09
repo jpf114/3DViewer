@@ -20,6 +20,8 @@ public:
     bool visible() const;
     double opacity() const;
 
+    void setId(std::string id);
+    void setName(std::string name);
     void setVisible(bool visible);
     void setOpacity(double opacity);
 

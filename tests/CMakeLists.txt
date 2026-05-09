@@ -1,12 +1,16 @@
 add_executable(ApplicationSmokeTests
     app/ApplicationSmokeTests.cpp
+    ../src/app/ApplicationController.cpp
     ../src/app/MainWindow.cpp
     ../src/data/DataImporter.cpp
     ../src/data/GdalDatasetInspector.cpp
+    ../src/data/LayerConfig.cpp
+    ../src/data/MapConfig.cpp
     ../src/globe/GlobeWidget.cpp
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
+    ../src/layers/LayerManager.cpp
     ../src/tools/MeasureAreaTool.cpp
     ../src/tools/MeasureTool.cpp
     ../src/tools/PickTool.cpp

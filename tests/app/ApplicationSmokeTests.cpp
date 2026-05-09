@@ -6,13 +6,21 @@
 #include <QAction>
 #include <QApplication>
 #include <QDoubleSpinBox>
+#include <QDir>
+#include <QFile>
 #include <QKeyEvent>
+#include <QTemporaryDir>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTreeWidget>
 
+#include "app/ApplicationController.h"
 #include "app/MainWindow.h"
+#include "data/DataImporter.h"
 #include "data/DataSourceDescriptor.h"
+#include "globe/GlobeWidget.h"
+#include "layers/Layer.h"
+#include "layers/LayerManager.h"
 #include "layers/LayerTypes.h"
 #include "ui/LayerTreeDock.h"
 #include "ui/PropertyDock.h"
@@ -248,6 +256,77 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     if (!require(layerDock.currentLayerId().isEmpty(), "placeholder should clear current layer id after removal")) {
+        return EXIT_FAILURE;
+    }
+
+    QTemporaryDir tempDir;
+    if (!require(tempDir.isValid(), "temporary directory should be created")) {
+        return EXIT_FAILURE;
+    }
+
+    const QString vectorDirPath = tempDir.filePath("vector");
+    if (!require(QDir().mkpath(vectorDirPath), "vector fixture directory should be created")) {
+        return EXIT_FAILURE;
+    }
+
+    QFile vectorFile(vectorDirPath + "/roads.geojson");
+    if (!require(vectorFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "vector fixture should open for writing")) {
+        return EXIT_FAILURE;
+    }
+    vectorFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Road A"},"geometry":{"type":"Point","coordinates":[120.1,30.2]}}]})");
+    vectorFile.close();
+
+    QFile layerConfigFile(tempDir.filePath("layers.json"));
+    if (!require(layerConfigFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "layers config should open for writing")) {
+        return EXIT_FAILURE;
+    }
+    layerConfigFile.write(R"({
+  "layers": [
+    {
+      "id": "persisted-vector-1",
+      "name": "恢复图层",
+      "path": "vector/roads.geojson",
+      "kind": "vector",
+      "autoload": true,
+      "visible": false,
+      "opacity": 0.25
+    }
+  ]
+})");
+    layerConfigFile.close();
+
+    MainWindow persistedWindow;
+    LayerManager persistedLayerManager;
+    DataImporter importer;
+    ApplicationController persistedController(
+        persistedWindow,
+        persistedWindow.globeWidget()->sceneController(),
+        persistedLayerManager,
+        importer);
+    persistedController.loadBasemapAndLayers(tempDir.path().toStdString());
+
+    if (!require(persistedLayerManager.layers().size() == 1, "persisted layer should be restored into layer manager")) {
+        return EXIT_FAILURE;
+    }
+    const auto &persistedLayer = persistedLayerManager.layers().front();
+    if (!require(persistedLayer->id() == "persisted-vector-1", "persisted layer id should be preserved")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(persistedLayer->name() == "恢复图层", "persisted layer name should be preserved")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!persistedLayer->visible() && std::abs(persistedLayer->opacity() - 0.25) <= 1.0e-6,
+                 "persisted layer visibility and opacity should be restored")) {
+        return EXIT_FAILURE;
+    }
+
+    auto *persistedTree = persistedWindow.findChild<QTreeWidget *>();
+    if (!require(persistedTree != nullptr && persistedTree->topLevelItemCount() == 1,
+                 "persisted layer should be shown in layer tree")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(persistedTree->topLevelItem(0)->text(0) == QString::fromUtf8(u8"恢复图层"),
+                 "layer tree should show persisted layer name")) {
         return EXIT_FAILURE;
     }
 
