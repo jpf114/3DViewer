@@ -27,6 +27,7 @@ signals:
     void removeLayerRequested(const QString &layerId);
     void zoomToLayerRequested(const QString &layerId);
     void editMeasurementRequested(const QString &layerId);
+    void exportMeasurementRequested(const QString &layerId);
 
 private:
     void emitLayerOrderFromTree();

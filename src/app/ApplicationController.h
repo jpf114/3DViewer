@@ -41,6 +41,7 @@ private:
     void addToRecentFiles(const QString &path);
     void addMeasurementLayer(const MeasurementLayerData &data);
     void editSelectedMeasurement();
+    void exportSelectedMeasurement();
 
     MainWindow &window_;
     SceneController &sceneController_;

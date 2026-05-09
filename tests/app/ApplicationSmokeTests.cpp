@@ -60,15 +60,22 @@ int main(int argc, char **argv) {
     QObject::connect(&window, &MainWindow::editSelectedMeasurementRequested, [&editRequested]() {
         editRequested = true;
     });
+    bool exportRequested = false;
+    QObject::connect(&window, &MainWindow::exportSelectedMeasurementRequested, [&exportRequested]() {
+        exportRequested = true;
+    });
 
     auto *editAction = window.findChild<QAction *>("editMeasureAction");
+    auto *exportAction = window.findChild<QAction *>("exportMeasureAction");
     auto *undoAction = window.findChild<QAction *>("undoMeasureAction");
     auto *clearAction = window.findChild<QAction *>("clearMeasureAction");
-    if (!require(editAction != nullptr && undoAction != nullptr && clearAction != nullptr,
+    if (!require(editAction != nullptr && exportAction != nullptr &&
+                     undoAction != nullptr && clearAction != nullptr,
                  "measurement toolbar actions should exist")) {
         return EXIT_FAILURE;
     }
-    if (!require(!editAction->isEnabled() && !undoAction->isEnabled() && !clearAction->isEnabled(),
+    if (!require(!editAction->isEnabled() && !exportAction->isEnabled() &&
+                     !undoAction->isEnabled() && !clearAction->isEnabled(),
                  "measurement toolbar actions should be disabled initially")) {
         return EXIT_FAILURE;
     }
@@ -110,15 +117,21 @@ int main(int argc, char **argv) {
                                std::nullopt,
                                std::nullopt,
                                measurementData);
-    if (!require(editAction->isEnabled(), "edit action should enable for measurement layer")) {
+    if (!require(editAction->isEnabled() && exportAction->isEnabled(),
+                 "measurement actions should enable for measurement layer")) {
         return EXIT_FAILURE;
     }
     editAction->trigger();
     if (!require(editRequested, "edit action should emit measurement edit request")) {
         return EXIT_FAILURE;
     }
+    exportAction->trigger();
+    if (!require(exportRequested, "export action should emit measurement export request")) {
+        return EXIT_FAILURE;
+    }
     window.showLayerDetails(QString::fromUtf8(u8"经度：120.123456\n纬度：30.654321"));
-    if (!require(!editAction->isEnabled(), "non-layer details should clear measurement edit state")) {
+    if (!require(!editAction->isEnabled() && !exportAction->isEnabled(),
+                 "non-layer details should clear measurement actions")) {
         return EXIT_FAILURE;
     }
     auto *windowTextEdit = window.findChild<QTextEdit *>();
@@ -447,8 +460,10 @@ int main(int argc, char **argv) {
         std::nullopt,
         removableMeasurement);
     auto *removeEditAction = removeWindow.findChild<QAction *>("editMeasureAction");
-    if (!require(removeEditAction != nullptr && removeEditAction->isEnabled(),
-                 "measurement edit action should enable before removing selected layer")) {
+    auto *removeExportAction = removeWindow.findChild<QAction *>("exportMeasureAction");
+    if (!require(removeEditAction != nullptr && removeExportAction != nullptr &&
+                     removeEditAction->isEnabled() && removeExportAction->isEnabled(),
+                 "measurement actions should enable before removing selected layer")) {
         return EXIT_FAILURE;
     }
     removeWindow.clearLayerSelection();
@@ -466,8 +481,8 @@ int main(int argc, char **argv) {
                  "current selected layer should clear after removing selected layer")) {
         return EXIT_FAILURE;
     }
-    if (!require(!removeEditAction->isEnabled(),
-                 "measurement edit action should reset after removing selected layer")) {
+    if (!require(!removeEditAction->isEnabled() && !removeExportAction->isEnabled(),
+                 "measurement actions should reset after removing selected layer")) {
         return EXIT_FAILURE;
     }
     auto *removeTextEdit = removeWindow.findChild<QTextEdit *>();

@@ -71,10 +71,14 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
             icons.icon("magnifying-glass-plus-regular.svg", 16, menuColor),
             QString::fromUtf8(u8"缩放到图层"));
         QAction *editMeasurementAction = nullptr;
+        QAction *exportMeasurementAction = nullptr;
         if (kind == LayerKind::Measurement) {
             editMeasurementAction = menu.addAction(
                 icons.icon("ruler-regular.svg", 16, menuColor),
                 QString::fromUtf8(u8"编辑量测"));
+            exportMeasurementAction = menu.addAction(
+                icons.icon("export-regular.svg", 16, menuColor),
+                QString::fromUtf8(u8"瀵煎嚭缁撴灉..."));
             menu.addSeparator();
         } else {
             menu.addSeparator();
@@ -88,6 +92,8 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
             emit zoomToLayerRequested(layerId);
         } else if (chosen == editMeasurementAction) {
             emit editMeasurementRequested(layerId);
+        } else if (chosen == exportMeasurementAction) {
+            emit exportMeasurementRequested(layerId);
         } else if (chosen == removeAction) {
             emit removeLayerRequested(layerId);
         }

@@ -180,6 +180,11 @@ MainWindow::MainWindow(QWidget *parent)
         icons.icon("ruler-regular.svg", 20, toolColor),
         QString::fromUtf8(u8"编辑量测"));
     editMeasureAction_->setObjectName("editMeasureAction");
+    exportMeasureAction_ = toolBar->addAction(
+        icons.icon("export-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"瀵煎嚭缁撴灉"));
+    exportMeasureAction_->setObjectName("exportMeasureAction");
+    exportMeasureAction_->setToolTip(QString::fromUtf8(u8"瀵煎嚭褰撳墠閫変腑鐨勯噺娴嬬粨鏋滀负 GeoJSON"));
     editMeasureAction_->setToolTip(QString::fromUtf8(u8"继续编辑当前选中的量测结果"));
 
     undoMeasureAction_ = toolBar->addAction(
@@ -239,6 +244,11 @@ MainWindow::MainWindow(QWidget *parent)
             emit editSelectedMeasurementRequested();
         }
     });
+    connect(layerDock_, &LayerTreeDock::exportMeasurementRequested, this, [this](const QString &) {
+        if (exportMeasureAction_ != nullptr && exportMeasureAction_->isEnabled()) {
+            emit exportSelectedMeasurementRequested();
+        }
+    });
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);
     connect(propertyDock_, &PropertyDock::bandMappingChanged, this, &MainWindow::bandMappingChanged);
     connect(propertyDock_, &PropertyDock::modelPlacementChanged, this, &MainWindow::modelPlacementChanged);
@@ -248,6 +258,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(globeWidget_, &GlobeWidget::measurementStatusChanged, statusController_, &StatusBarController::setMeasurementText);
     connect(editMeasureAction_, &QAction::triggered, this, &MainWindow::editSelectedMeasurementRequested);
+    connect(exportMeasureAction_, &QAction::triggered, this, &MainWindow::exportSelectedMeasurementRequested);
     connect(undoMeasureAction_, &QAction::triggered, this, &MainWindow::undoMeasurementRequested);
     connect(clearMeasureAction_, &QAction::triggered, this, [this]() {
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
@@ -378,6 +389,9 @@ void MainWindow::refreshToolActionStates() {
 
     if (editMeasureAction_ != nullptr) {
         editMeasureAction_->setEnabled(selectedMeasurementLayer_);
+    }
+    if (exportMeasureAction_ != nullptr) {
+        exportMeasureAction_->setEnabled(selectedMeasurementLayer_);
     }
     if (undoMeasureAction_ != nullptr) {
         undoMeasureAction_->setEnabled(measurementToolActive);

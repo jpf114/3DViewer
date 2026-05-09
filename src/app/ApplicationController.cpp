@@ -208,6 +208,19 @@ QString measurementTempPath(const QString &layerId) {
     return QDir(dirPath).filePath(layerId + QString::fromUtf8(u8".geojson"));
 }
 
+QString safeExportBaseName(const QString &name) {
+    QString sanitized = name;
+    const QString invalidChars = QString::fromUtf8(u8"\\/:*?\"<>|");
+    for (const QChar ch : invalidChars) {
+        sanitized.replace(ch, '_');
+    }
+    sanitized = sanitized.trimmed();
+    if (sanitized.isEmpty()) {
+        return QString::fromUtf8(u8"量测结果");
+    }
+    return sanitized;
+}
+
 bool writeMeasurementGeoJson(const QString &path, const MeasurementLayerData &data) {
     QJsonArray coordinates;
     for (const auto &point : data.points) {
@@ -306,6 +319,10 @@ ApplicationController::ApplicationController(MainWindow &window,
 
     QObject::connect(&window_, &MainWindow::editSelectedMeasurementRequested, [this]() {
         editSelectedMeasurement();
+    });
+
+    QObject::connect(&window_, &MainWindow::exportSelectedMeasurementRequested, [this]() {
+        exportSelectedMeasurement();
     });
 
     QObject::connect(&window_, &MainWindow::resetViewRequested, [this]() {
@@ -657,6 +674,50 @@ void ApplicationController::editSelectedMeasurement() {
             ? QString::fromUtf8(u8"已进入测面编辑状态。")
             : QString::fromUtf8(u8"已进入测距编辑状态。"),
         3000);
+}
+
+void ApplicationController::exportSelectedMeasurement() {
+    const QString currentLayerId = window_.currentLayerId();
+    if (currentLayerId.isEmpty()) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"请先选择一条量测结果。"), 3000);
+        return;
+    }
+
+    const auto layer = layerManager_.findById(currentLayerId.toStdString());
+    if (!layer || layer->kind() != LayerKind::Measurement) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"当前选中的不是量测结果。"), 3000);
+        return;
+    }
+
+    const auto measurementData = layer->measurementData();
+    if (!measurementData.has_value()) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果数据不完整，无法导出。"), 3000);
+        return;
+    }
+
+    const QString defaultPath = QDir::home().filePath(safeExportBaseName(utf8(layer->name())) + ".geojson");
+    const QString path = QFileDialog::getSaveFileName(
+        &window_,
+        QString::fromUtf8(u8"导出量测结果"),
+        defaultPath,
+        QString::fromUtf8(u8"GeoJSON (*.geojson)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    QString normalizedPath = path;
+    if (!normalizedPath.endsWith(".geojson", Qt::CaseInsensitive)) {
+        normalizedPath += ".geojson";
+    }
+
+    if (!writeMeasurementGeoJson(normalizedPath, *measurementData)) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果导出失败。"), 3000);
+        return;
+    }
+
+    window_.statusBar()->showMessage(
+        QString::fromUtf8(u8"量测结果已导出：%1").arg(normalizedPath),
+        5000);
 }
 
 void ApplicationController::setBandMapping(const std::string &layerId, int red, int green, int blue) {
