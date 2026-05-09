@@ -137,6 +137,7 @@ MainWindow::MainWindow(QWidget *parent)
     undoMeasureAction_->setToolTip(u"撤销当前量测的最后一个点 (Backspace)"_s);
 
     clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空量测"_s);
+    clearMeasureAction_->setObjectName("clearMeasureAction");
     clearMeasureAction_->setToolTip(u"清空当前量测结果 (Esc)"_s);
 
     toolBar->addSeparator();
@@ -151,16 +152,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(toolGroup_, &QActionGroup::triggered, this, [this](QAction *action) {
         if (action == panAction_) {
+            currentToolId_ = static_cast<int>(ToolId::Pan);
             emit toolChanged(static_cast<int>(ToolId::Pan));
         } else if (action == pickAction_) {
+            currentToolId_ = static_cast<int>(ToolId::Pick);
             emit toolChanged(static_cast<int>(ToolId::Pick));
         } else if (action == measureAction_) {
+            currentToolId_ = static_cast<int>(ToolId::Measure);
             emit toolChanged(static_cast<int>(ToolId::Measure));
             showMeasureHint(propertyDock_, statusController_);
         } else if (action == measureAreaAction_) {
+            currentToolId_ = static_cast<int>(ToolId::MeasureArea);
             emit toolChanged(static_cast<int>(ToolId::MeasureArea));
             showMeasureAreaHint(propertyDock_, statusController_);
         }
+        refreshToolActionStates();
     });
 
     connect(layerDock_, &LayerTreeDock::layerSelected, this, &MainWindow::layerSelected);
@@ -182,6 +188,7 @@ MainWindow::MainWindow(QWidget *parent)
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
     });
     propertyDock_->showText(u"未选择图层。"_s);
+    refreshToolActionStates();
 }
 
 GlobeWidget *MainWindow::globeWidget() const {
@@ -205,6 +212,7 @@ QString MainWindow::currentLayerId() const {
 }
 
 void MainWindow::setActiveToolAction(int toolId) {
+    currentToolId_ = toolId;
     const ToolId resolved = static_cast<ToolId>(toolId);
     switch (resolved) {
     case ToolId::Pick:
@@ -221,6 +229,7 @@ void MainWindow::setActiveToolAction(int toolId) {
         panAction_->setChecked(true);
         break;
     }
+    refreshToolActionStates();
 }
 
 void MainWindow::showLayerDetails(const QString &text) {
@@ -270,12 +279,32 @@ void MainWindow::showLayerProperties(const QString &layerId, const QString &name
                                      const std::optional<VectorLayerInfo> &vectorMeta,
                                      const std::optional<ModelPlacement> &modelPlacement,
                                      const std::optional<MeasurementLayerData> &measurementData) {
+    selectedMeasurementLayer_ = measurementData.has_value();
+    refreshToolActionStates();
     propertyDock_->showLayerProperties(
         layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta, modelPlacement, measurementData);
 }
 
 void MainWindow::clearLayerProperties() {
+    selectedMeasurementLayer_ = false;
+    refreshToolActionStates();
     propertyDock_->clearLayerProperties();
+}
+
+void MainWindow::refreshToolActionStates() {
+    const bool measurementToolActive =
+        currentToolId_ == static_cast<int>(ToolId::Measure) ||
+        currentToolId_ == static_cast<int>(ToolId::MeasureArea);
+
+    if (editMeasureAction_ != nullptr) {
+        editMeasureAction_->setEnabled(selectedMeasurementLayer_);
+    }
+    if (undoMeasureAction_ != nullptr) {
+        undoMeasureAction_->setEnabled(measurementToolActive);
+    }
+    if (clearMeasureAction_ != nullptr) {
+        clearMeasureAction_->setEnabled(measurementToolActive);
+    }
 }
 
 void MainWindow::setRecentFiles(const QStringList &files) {
@@ -319,24 +348,32 @@ void MainWindow::dropEvent(QDropEvent *event) {
 void MainWindow::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_1 && !event->modifiers()) {
         panAction_->setChecked(true);
+        currentToolId_ = static_cast<int>(ToolId::Pan);
         emit toolChanged(static_cast<int>(ToolId::Pan));
+        refreshToolActionStates();
         return;
     }
     if (event->key() == Qt::Key_2 && !event->modifiers()) {
         pickAction_->setChecked(true);
+        currentToolId_ = static_cast<int>(ToolId::Pick);
         emit toolChanged(static_cast<int>(ToolId::Pick));
+        refreshToolActionStates();
         return;
     }
     if (event->key() == Qt::Key_3 && !event->modifiers()) {
         measureAction_->setChecked(true);
+        currentToolId_ = static_cast<int>(ToolId::Measure);
         emit toolChanged(static_cast<int>(ToolId::Measure));
         showMeasureHint(propertyDock_, statusController_);
+        refreshToolActionStates();
         return;
     }
     if (event->key() == Qt::Key_4 && !event->modifiers()) {
         measureAreaAction_->setChecked(true);
+        currentToolId_ = static_cast<int>(ToolId::MeasureArea);
         emit toolChanged(static_cast<int>(ToolId::MeasureArea));
         showMeasureAreaHint(propertyDock_, statusController_);
+        refreshToolActionStates();
         return;
     }
     if (event->key() == Qt::Key_Escape && !event->modifiers()) {

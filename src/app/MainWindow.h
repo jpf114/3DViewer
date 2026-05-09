@@ -69,6 +69,7 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private:
+    void refreshToolActionStates();
     void updateRecentMenu();
 
     GlobeWidget *globeWidget_;
@@ -87,4 +88,6 @@ private:
     QActionGroup *toolGroup_;
     QMenu *recentMenu_;
     QStringList recentFiles_;
+    int currentToolId_ = 0;
+    bool selectedMeasurementLayer_ = false;
 };

@@ -33,7 +33,39 @@ int main(int argc, char **argv) {
         editRequested = true;
     });
     auto *editAction = window.findChild<QAction *>("editMeasureAction");
-    if (!editAction) {
+    auto *undoAction = window.findChild<QAction *>("undoMeasureAction");
+    auto *clearAction = window.findChild<QAction *>("clearMeasureAction");
+    if (!editAction || !undoAction || !clearAction) {
+        return EXIT_FAILURE;
+    }
+    if (editAction->isEnabled() || undoAction->isEnabled() || clearAction->isEnabled()) {
+        return EXIT_FAILURE;
+    }
+    window.setActiveToolAction(1);
+    if (undoAction->isEnabled() || clearAction->isEnabled()) {
+        return EXIT_FAILURE;
+    }
+
+    window.setActiveToolAction(2);
+    if (!undoAction->isEnabled() || !clearAction->isEnabled()) {
+        return EXIT_FAILURE;
+    }
+
+    MeasurementLayerData measurementData;
+    measurementData.kind = MeasurementKind::Distance;
+    measurementData.points.push_back({120.0, 30.0});
+    measurementData.points.push_back({121.0, 31.0});
+    window.showLayerProperties("measurement-1",
+                               "Measure 1",
+                               "量测",
+                               "memory",
+                               true,
+                               1.0,
+                               std::nullopt,
+                               std::nullopt,
+                               std::nullopt,
+                               measurementData);
+    if (!editAction->isEnabled()) {
         return EXIT_FAILURE;
     }
     editAction->trigger();
