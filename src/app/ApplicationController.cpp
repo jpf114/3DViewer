@@ -190,7 +190,7 @@ void ApplicationController::importFile(const std::string &path) {
                 &window_,
                 u"导入失败"_s,
                 QString(
-                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 glTF/glb 三维模型。"_s)
+                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 OBJ/STL/3DS 三维模型。"_s)
                     .arg(utf8(importPath)));
             return;
         }

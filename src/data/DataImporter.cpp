@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <osgDB/Registry>
+#include <ranges>
 #include <spdlog/spdlog.h>
 
 #include "layers/ElevationLayer.h"
@@ -13,6 +14,12 @@
 #include "layers/VectorLayer.h"
 
 namespace {
+
+constexpr const char *kSupportedModelExtensions[] = {
+    ".obj",
+    ".stl",
+    ".3ds",
+};
 
 std::string normalizedLowerExtension(const std::string &path) {
     const auto extension = std::filesystem::path(path).extension().string();
@@ -25,7 +32,9 @@ std::string normalizedLowerExtension(const std::string &path) {
 
 bool isModelExtension(const std::string &path) {
     const auto lowerExtension = normalizedLowerExtension(path);
-    return lowerExtension == ".gltf" || lowerExtension == ".glb";
+    return std::ranges::any_of(kSupportedModelExtensions, [&lowerExtension](const char *extension) {
+        return lowerExtension == extension;
+    });
 }
 
 bool isModelRuntimeSupported(const std::string &path) {
@@ -101,7 +110,7 @@ std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
     }
 
     if (modelPath && !modelRuntimeSupported) {
-        spdlog::warn("DataImporter: glTF/glb runtime reader is unavailable for '{}'", path);
+        spdlog::warn("DataImporter: model runtime reader is unavailable for '{}'", path);
         return nullptr;
     }
 

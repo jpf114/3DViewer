@@ -79,21 +79,25 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    const std::filesystem::path modelPath = std::filesystem::temp_directory_path() / "threeviewer-model-test.glb";
+    const std::filesystem::path modelPath = std::filesystem::temp_directory_path() / "threeviewer-model-test.obj";
     {
-        std::ofstream modelFile(modelPath, std::ios::binary);
-        modelFile << "glb";
+        std::ofstream modelFile(modelPath);
+        modelFile << "o triangle\n";
+        modelFile << "v 0 0 0\n";
+        modelFile << "v 1 0 0\n";
+        modelFile << "v 0 1 0\n";
+        modelFile << "f 1 2 3\n";
     }
     const auto modelLayer = importer.import(modelPath.string());
     std::filesystem::remove(modelPath);
-    const bool glbSupported = osgDB::Registry::instance()->getReaderWriterForExtension("glb") != nullptr;
-    if (glbSupported) {
+    const bool objSupported = osgDB::Registry::instance()->getReaderWriterForExtension("obj") != nullptr;
+    if (objSupported) {
         if (!modelLayer || modelLayer->kind() != LayerKind::Model) {
-            std::cerr << "Expected .glb path import to create a model layer.\n";
+            std::cerr << "Expected .obj path import to create a model layer.\n";
             return EXIT_FAILURE;
         }
     } else if (modelLayer) {
-        std::cerr << "Expected .glb path import to fail when runtime reader is unavailable.\n";
+        std::cerr << "Expected .obj path import to fail when runtime reader is unavailable.\n";
         return EXIT_FAILURE;
     }
 
