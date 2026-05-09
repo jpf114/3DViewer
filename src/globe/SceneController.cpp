@@ -183,6 +183,7 @@ void applyMeasurementDraftState(osg::StateSet *stateSet, bool stippled = false) 
         return;
     }
 
+    osgEarth::GLUtils::setGlobalDefaults(stateSet);
     stateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
     stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
@@ -286,6 +287,7 @@ osg::ref_ptr<osg::Node> createMeasurementDraftNode(osgEarth::MapNode *mapNode, c
     }
 
     auto geode = osg::ref_ptr<osg::Geode>(new osg::Geode());
+    osgEarth::GLUtils::setGlobalDefaults(geode->getOrCreateStateSet());
     if (data.kind == MeasurementKind::Area && vertices->size() >= 3) {
         if (auto fillGeometry = createMeasurementFillGeometry(vertices.get())) {
             geode->addDrawable(fillGeometry.get());

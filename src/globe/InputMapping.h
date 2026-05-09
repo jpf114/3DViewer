@@ -29,4 +29,18 @@ inline bool shouldScheduleHoverPick(Qt::MouseButtons buttons, ToolId activeToolI
     return activeToolId == ToolId::Pick;
 }
 
+inline bool shouldForwardSceneMouseButton(ToolId activeToolId, Qt::MouseButton button) {
+    switch (activeToolId) {
+    case ToolId::Pan:
+        return button == Qt::LeftButton || button == Qt::MiddleButton || button == Qt::RightButton;
+    case ToolId::Pick:
+        return button == Qt::MiddleButton || button == Qt::RightButton;
+    case ToolId::Measure:
+    case ToolId::MeasureArea:
+        return button == Qt::MiddleButton;
+    default:
+        return false;
+    }
+}
+
 } // namespace globe

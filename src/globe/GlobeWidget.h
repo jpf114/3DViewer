@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMetaType>
+#include <Qt>
 #include <QString>
 #include <QWidget>
 
@@ -47,4 +48,5 @@ private:
     QTimer *pickTimer_;
     int lastPickX_ = 0;
     int lastPickY_ = 0;
+    Qt::MouseButtons forwardedButtons_ = Qt::NoButton;
 };

@@ -32,5 +32,29 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    if (!globe::shouldForwardSceneMouseButton(ToolId::Pan, Qt::LeftButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::Pan, Qt::MiddleButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::Pan, Qt::RightButton)) {
+        return EXIT_FAILURE;
+    }
+
+    if (globe::shouldForwardSceneMouseButton(ToolId::Pick, Qt::LeftButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::Pick, Qt::MiddleButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::Pick, Qt::RightButton)) {
+        return EXIT_FAILURE;
+    }
+
+    if (globe::shouldForwardSceneMouseButton(ToolId::Measure, Qt::LeftButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::Measure, Qt::MiddleButton) ||
+        globe::shouldForwardSceneMouseButton(ToolId::Measure, Qt::RightButton)) {
+        return EXIT_FAILURE;
+    }
+
+    if (globe::shouldForwardSceneMouseButton(ToolId::MeasureArea, Qt::LeftButton) ||
+        !globe::shouldForwardSceneMouseButton(ToolId::MeasureArea, Qt::MiddleButton) ||
+        globe::shouldForwardSceneMouseButton(ToolId::MeasureArea, Qt::RightButton)) {
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }

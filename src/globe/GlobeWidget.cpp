@@ -69,7 +69,9 @@ PickResult GlobeWidget::pickAt(const QPointF &logicalPos) const {
 
 void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
     const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
-    sceneController_.mouseMove(static_cast<float>(scenePos.x()), static_cast<float>(scenePos.y()));
+    if (forwardedButtons_ != Qt::NoButton) {
+        sceneController_.mouseMove(static_cast<float>(scenePos.x()), static_cast<float>(scenePos.y()));
+    }
 
     if (globe::shouldScheduleHoverPick(event->buttons(), toolManager().activeToolId())) {
         lastPickX_ = static_cast<int>(std::lround(scenePos.x()));
@@ -85,12 +87,13 @@ void GlobeWidget::mouseMoveEvent(QMouseEvent *event) {
 
 void GlobeWidget::mousePressEvent(QMouseEvent *event) {
     const unsigned int button = mapQtButton(event->button());
-    if (button != 0) {
+    if (button != 0 && globe::shouldForwardSceneMouseButton(toolManager().activeToolId(), event->button())) {
         const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
         sceneController_.mousePress(
             static_cast<float>(scenePos.x()),
             static_cast<float>(scenePos.y()),
             button);
+        forwardedButtons_.setFlag(event->button(), true);
     }
     pickTimer_->stop();
     toolManager().mousePressEvent(*this, event);
@@ -99,7 +102,7 @@ void GlobeWidget::mousePressEvent(QMouseEvent *event) {
 
 void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
     const unsigned int button = mapQtButton(event->button());
-    if (button != 0) {
+    if (button != 0 && forwardedButtons_.testFlag(event->button())) {
         const QPointF scenePos = globe::mapToScenePoint(event->position(), size(), pixelSceneSize(*this));
         sceneController_.mouseRelease(
             static_cast<float>(scenePos.x()),
@@ -107,6 +110,7 @@ void GlobeWidget::mouseReleaseEvent(QMouseEvent *event) {
             button);
         lastPickX_ = static_cast<int>(std::lround(scenePos.x()));
         lastPickY_ = static_cast<int>(std::lround(scenePos.y()));
+        forwardedButtons_.setFlag(event->button(), false);
     }
     toolManager().mouseReleaseEvent(*this, event);
     if (globe::shouldScheduleHoverPick(event->buttons(), toolManager().activeToolId())) {

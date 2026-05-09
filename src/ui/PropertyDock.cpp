@@ -339,7 +339,7 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
         pickTable_->setItem(i, 1, makeTableItem(value));
     }
     pickTable_->setVisible(!attributes.isEmpty());
-    updateTableHeight(pickTable_);
+    updateTableHeight(pickTable_, 16);
 }
 
 void PropertyDock::showLayerProperties(const QString &layerId, const QString &name, const QString &typeText,
@@ -561,9 +561,9 @@ void PropertyDock::clearLayerProperties() {
 void PropertyDock::resizeEvent(QResizeEvent *event) {
     QDockWidget::resizeEvent(event);
     updateTextHeight();
-    updateTableHeight(pickTable_);
-    updateTableHeight(bandTable_);
-    updateTableHeight(fieldTable_);
+    updateTableHeight(pickTable_, 16);
+    updateTableHeight(bandTable_, 10);
+    updateTableHeight(fieldTable_, 10);
 }
 
 void PropertyDock::updateTextHeight() {
@@ -628,7 +628,7 @@ void PropertyDock::clearInspection() {
     pickTable_->clearContents();
     pickTable_->setRowCount(0);
     pickTable_->setVisible(false);
-    updateTableHeight(pickTable_);
+    updateTableHeight(pickTable_, 16);
 }
 
 void PropertyDock::onOpacitySliderChanged(int value) {
