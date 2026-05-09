@@ -270,6 +270,9 @@ void MainWindow::setActiveToolAction(int toolId) {
 }
 
 void MainWindow::showLayerDetails(const QString &text) {
+    selectedMeasurementLayer_ = false;
+    refreshToolActionStates();
+
     const QStringList lines = text.split('\n');
     QStringList summaryLines;
     QList<std::pair<QString, QString>> attributes;
@@ -307,6 +310,8 @@ void MainWindow::showLayerDetails(const QString &text) {
 
 void MainWindow::showPickDetails(const QStringList &summaryLines,
                                  const QList<std::pair<QString, QString>> &attributes) {
+    selectedMeasurementLayer_ = false;
+    refreshToolActionStates();
     propertyDock_->showPickDetails(summaryLines, attributes);
 }
 

@@ -296,6 +296,7 @@ void PropertyDock::setupUi() {
 void PropertyDock::showText(const QString &text) {
     text_->setPlainText(text);
     updateTextHeight();
+    clearActiveLayerState();
     clearInspection();
 }
 
@@ -303,6 +304,7 @@ void PropertyDock::showPickDetails(const QStringList &summaryLines,
                                    const QList<std::pair<QString, QString>> &attributes) {
     text_->setPlainText(QString::fromUtf8(u8"当前显示拾取结果，可查看位置与要素属性。"));
     updateTextHeight();
+    clearActiveLayerState();
     clearInspection();
 
     for (const QString &line : summaryLines) {
@@ -510,10 +512,15 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
 }
 
 void PropertyDock::clearLayerProperties() {
-    currentLayerId_.clear();
-    currentBandCount_ = 0;
+    clearActiveLayerState();
+    clearInspection();
     text_->setPlainText(QString::fromUtf8(u8"未选择图层。"));
     updateTextHeight();
+}
+
+void PropertyDock::clearActiveLayerState() {
+    currentLayerId_.clear();
+    currentBandCount_ = 0;
 
     opacitySlider_->blockSignals(true);
     opacitySlider_->setValue(100);

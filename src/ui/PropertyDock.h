@@ -52,6 +52,7 @@ private:
     void updateTableHeight(QTableWidget *table, int maxVisibleRows = 10);
     void clearForm(QFormLayout *form);
     void clearInspection();
+    void clearActiveLayerState();
     void onOpacitySliderChanged(int value);
     void onBandComboChanged(int index);
     void onModelPlacementChanged();

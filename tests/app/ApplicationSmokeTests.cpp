@@ -94,6 +94,10 @@ int main(int argc, char **argv) {
     if (!require(editRequested, "edit action should emit measurement edit request")) {
         return EXIT_FAILURE;
     }
+    window.showLayerDetails(QString::fromUtf8(u8"经度：120.123456\n纬度：30.654321"));
+    if (!require(!editAction->isEnabled(), "non-layer details should clear measurement edit state")) {
+        return EXIT_FAILURE;
+    }
 
     PropertyDock dock;
     auto *textEdit = dock.findChild<QTextEdit *>();
@@ -205,6 +209,10 @@ int main(int argc, char **argv) {
     }
     if (!require(visibleTable->verticalScrollBarPolicy() == Qt::ScrollBarAlwaysOff,
                  "short pick result tables should fit without inner scrolling")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!dock.findChild<QDoubleSpinBox *>("modelScaleSpin")->isVisible(),
+                 "pick details should hide stale model placement controls")) {
         return EXIT_FAILURE;
     }
 
