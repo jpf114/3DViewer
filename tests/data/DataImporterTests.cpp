@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <osgDB/Registry>
 
 #include "data/DataImporter.h"
 #include "data/DataSourceDescriptor.h"
@@ -85,8 +86,14 @@ int main() {
     }
     const auto modelLayer = importer.import(modelPath.string());
     std::filesystem::remove(modelPath);
-    if (!modelLayer || modelLayer->kind() != LayerKind::Model) {
-        std::cerr << "Expected .glb path import to create a model layer.\n";
+    const bool glbSupported = osgDB::Registry::instance()->getReaderWriterForExtension("glb") != nullptr;
+    if (glbSupported) {
+        if (!modelLayer || modelLayer->kind() != LayerKind::Model) {
+            std::cerr << "Expected .glb path import to create a model layer.\n";
+            return EXIT_FAILURE;
+        }
+    } else if (modelLayer) {
+        std::cerr << "Expected .glb path import to fail when runtime reader is unavailable.\n";
         return EXIT_FAILURE;
     }
 

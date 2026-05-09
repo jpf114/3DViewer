@@ -17,6 +17,7 @@ add_executable(ApplicationSmokeTests
 
 target_include_directories(ApplicationSmokeTests PRIVATE ../src)
 target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg osgEarth::osgEarth GDAL::GDAL spdlog::spdlog)
+threeviewer_runtime_post_build(ApplicationSmokeTests)
 
 add_test(NAME ApplicationSmokeTests COMMAND ApplicationSmokeTests)
 
@@ -29,6 +30,7 @@ add_executable(SceneControllerTests
 
 target_include_directories(SceneControllerTests PRIVATE ../src)
 target_link_libraries(SceneControllerTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets osgEarth::osgEarth GDAL::GDAL spdlog::spdlog)
+threeviewer_runtime_post_build(SceneControllerTests)
 
 add_test(NAME SceneControllerTests COMMAND SceneControllerTests)
 
@@ -103,7 +105,8 @@ add_executable(DataImporterTests
 
 target_compile_options(DataImporterTests PRIVATE /utf-8)
 target_include_directories(DataImporterTests PRIVATE ../src)
-target_link_libraries(DataImporterTests PRIVATE GDAL::GDAL spdlog::spdlog)
+target_link_libraries(DataImporterTests PRIVATE GDAL::GDAL osgEarth::osgEarth spdlog::spdlog)
+threeviewer_runtime_post_build(DataImporterTests)
 
 add_test(NAME DataImporterTests COMMAND DataImporterTests)
 

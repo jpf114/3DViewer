@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <memory>
+#include <osgDB/Registry>
 #include <spdlog/spdlog.h>
 
 #include "layers/ElevationLayer.h"
@@ -13,18 +14,36 @@
 
 namespace {
 
-std::optional<DataSourceDescriptor> inspectModelSource(const std::string &path) {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec) || ec) {
-        return std::nullopt;
-    }
-
+std::string normalizedLowerExtension(const std::string &path) {
     const auto extension = std::filesystem::path(path).extension().string();
     std::string lowerExtension = extension;
     std::transform(lowerExtension.begin(), lowerExtension.end(), lowerExtension.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
     });
-    if (lowerExtension != ".gltf" && lowerExtension != ".glb") {
+    return lowerExtension;
+}
+
+bool isModelExtension(const std::string &path) {
+    const auto lowerExtension = normalizedLowerExtension(path);
+    return lowerExtension == ".gltf" || lowerExtension == ".glb";
+}
+
+bool isModelRuntimeSupported(const std::string &path) {
+    const std::string lowerExtension = normalizedLowerExtension(path);
+    const std::string extensionWithoutDot = lowerExtension.starts_with('.')
+        ? lowerExtension.substr(1)
+        : lowerExtension;
+    return !extensionWithoutDot.empty() &&
+           osgDB::Registry::instance()->getReaderWriterForExtension(extensionWithoutDot) != nullptr;
+}
+
+std::optional<DataSourceDescriptor> inspectModelSource(const std::string &path, bool runtimeSupported) {
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) || ec) {
+        return std::nullopt;
+    }
+
+    if (!isModelExtension(path) || !runtimeSupported) {
         return std::nullopt;
     }
 
@@ -74,8 +93,16 @@ const char *dataSourceKindName(DataSourceKind kind) {
 } // namespace
 
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
-    if (const auto modelDescriptor = inspectModelSource(path); modelDescriptor.has_value()) {
+    const bool modelPath = isModelExtension(path);
+    const bool modelRuntimeSupported = modelPath && isModelRuntimeSupported(path);
+
+    if (const auto modelDescriptor = inspectModelSource(path, modelRuntimeSupported); modelDescriptor.has_value()) {
         return import(*modelDescriptor);
+    }
+
+    if (modelPath && !modelRuntimeSupported) {
+        spdlog::warn("DataImporter: glTF/glb runtime reader is unavailable for '{}'", path);
+        return nullptr;
     }
 
     const auto descriptor = inspector_.inspect(path);
