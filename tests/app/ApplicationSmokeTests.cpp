@@ -15,6 +15,7 @@
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTreeWidget>
+#include <QLabel>
 
 #include "app/ApplicationController.h"
 #include "app/MainWindow.h"
@@ -70,6 +71,17 @@ int main(int argc, char **argv) {
                  "measurement toolbar actions should be disabled initially")) {
         return EXIT_FAILURE;
     }
+    const auto labels = window.findChildren<QLabel *>();
+    bool foundMeasurementIdle = false;
+    for (QLabel *label : labels) {
+        if (label && label->text() == QString::fromUtf8(u8"量测：未激活")) {
+            foundMeasurementIdle = true;
+            break;
+        }
+    }
+    if (!require(foundMeasurementIdle, "status bar should show measurement idle text before activating tools")) {
+        return EXIT_FAILURE;
+    }
 
     window.setActiveToolAction(1);
     if (!require(!undoAction->isEnabled() && !clearAction->isEnabled(),
@@ -106,6 +118,17 @@ int main(int argc, char **argv) {
     }
     window.showLayerDetails(QString::fromUtf8(u8"经度：120.123456\n纬度：30.654321"));
     if (!require(!editAction->isEnabled(), "non-layer details should clear measurement edit state")) {
+        return EXIT_FAILURE;
+    }
+    window.setActiveToolAction(0);
+    foundMeasurementIdle = false;
+    for (QLabel *label : labels) {
+        if (label && label->text() == QString::fromUtf8(u8"量测：未激活")) {
+            foundMeasurementIdle = true;
+            break;
+        }
+    }
+    if (!require(foundMeasurementIdle, "switching back to pan should restore measurement idle text")) {
         return EXIT_FAILURE;
     }
 

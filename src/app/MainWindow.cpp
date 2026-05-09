@@ -79,6 +79,10 @@ void showMeasureAreaHint(PropertyDock *propertyDock, StatusBarController *status
     statusController->setMeasurementText(QString::fromUtf8(u8"测面：未开始"));
 }
 
+void showMeasurementIdle(StatusBarController *statusController) {
+    statusController->setMeasurementText(QString::fromUtf8(u8"量测：未激活"));
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -201,9 +205,11 @@ MainWindow::MainWindow(QWidget *parent)
         if (action == panAction_) {
             currentToolId_ = static_cast<int>(ToolId::Pan);
             emit toolChanged(static_cast<int>(ToolId::Pan));
+            showMeasurementIdle(statusController_);
         } else if (action == pickAction_) {
             currentToolId_ = static_cast<int>(ToolId::Pick);
             emit toolChanged(static_cast<int>(ToolId::Pick));
+            showMeasurementIdle(statusController_);
         } else if (action == measureAction_) {
             currentToolId_ = static_cast<int>(ToolId::Measure);
             emit toolChanged(static_cast<int>(ToolId::Measure));
@@ -407,6 +413,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
         panAction_->setChecked(true);
         currentToolId_ = static_cast<int>(ToolId::Pan);
         emit toolChanged(static_cast<int>(ToolId::Pan));
+        showMeasurementIdle(statusController_);
         refreshToolActionStates();
         return;
     }
@@ -414,6 +421,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
         pickAction_->setChecked(true);
         currentToolId_ = static_cast<int>(ToolId::Pick);
         emit toolChanged(static_cast<int>(ToolId::Pick));
+        showMeasurementIdle(statusController_);
         refreshToolActionStates();
         return;
     }
