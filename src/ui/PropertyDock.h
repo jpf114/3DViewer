@@ -49,6 +49,7 @@ protected:
 private:
     void setupUi();
     void updateTextHeight();
+    void updateTableHeight(QTableWidget *table, int maxVisibleRows = 6);
     void clearForm(QFormLayout *form);
     void clearInspection();
     void onOpacitySliderChanged(int value);
