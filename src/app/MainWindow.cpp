@@ -29,7 +29,11 @@ constexpr const char *kRecentFilesKey = "recentFiles";
 
 QString modelFilterText() {
     QStringList patterns;
-    for (const auto &extension : DataImporter::supportedModelExtensions()) {
+    auto extensions = DataImporter::availableRuntimeModelExtensions();
+    if (extensions.empty()) {
+        extensions = DataImporter::supportedModelExtensions();
+    }
+    for (const auto &extension : extensions) {
         patterns.append(QString("*%1").arg(QString::fromStdString(extension)));
     }
     return QString::fromUtf8(u8"三维模型 (%1)").arg(patterns.join(' '));
