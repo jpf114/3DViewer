@@ -67,6 +67,13 @@ bool splitKeyValue(const QString &line, QString *key, QString *value) {
     return true;
 }
 
+bool isStructuredPickSummaryKey(const QString &key) {
+    return key == QString::fromUtf8(u8"经度") ||
+           key == QString::fromUtf8(u8"纬度") ||
+           key == QString::fromUtf8(u8"高程(近似)") ||
+           key == QString::fromUtf8(u8"图层");
+}
+
 void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusController) {
     propertyDock->showText(QString::fromUtf8(
         u8"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
@@ -298,6 +305,7 @@ void MainWindow::showLayerDetails(const QString &text) {
     QStringList summaryLines;
     QList<std::pair<QString, QString>> attributes;
     bool hasStructuredPick = false;
+    bool hasPickSummaryFields = false;
 
     for (const QString &rawLine : lines) {
         const QString line = rawLine.trimmed();
@@ -318,10 +326,11 @@ void MainWindow::showLayerDetails(const QString &text) {
         }
 
         summaryLines.append(key + ": " + value);
+        hasPickSummaryFields = hasPickSummaryFields || isStructuredPickSummaryKey(key);
         hasStructuredPick = true;
     }
 
-    if (hasStructuredPick && !summaryLines.isEmpty()) {
+    if (hasStructuredPick && !summaryLines.isEmpty() && (hasPickSummaryFields || !attributes.isEmpty())) {
         propertyDock_->showPickDetails(summaryLines, attributes);
         return;
     }

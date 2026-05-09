@@ -120,6 +120,15 @@ int main(int argc, char **argv) {
     if (!require(!editAction->isEnabled(), "non-layer details should clear measurement edit state")) {
         return EXIT_FAILURE;
     }
+    auto *windowTextEdit = window.findChild<QTextEdit *>();
+    if (!require(windowTextEdit != nullptr, "main window property text edit should exist")) {
+        return EXIT_FAILURE;
+    }
+    window.showLayerDetails(QString::fromUtf8(u8"拾取：光标下无地形。"));
+    if (!require(windowTextEdit->toPlainText().contains(QString::fromUtf8(u8"拾取：光标下无地形。")),
+                 "pick miss message should stay as plain feedback instead of structured pick details")) {
+        return EXIT_FAILURE;
+    }
     window.setActiveToolAction(0);
     foundMeasurementIdle = false;
     for (QLabel *label : labels) {
