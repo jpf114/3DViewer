@@ -37,13 +37,16 @@ bool isModelExtension(const std::string &path) {
     });
 }
 
-bool isModelRuntimeSupported(const std::string &path) {
-    const std::string lowerExtension = normalizedLowerExtension(path);
+bool isModelRuntimeSupportedExtension(const std::string &lowerExtension) {
     const std::string extensionWithoutDot = lowerExtension.starts_with('.')
         ? lowerExtension.substr(1)
         : lowerExtension;
     return !extensionWithoutDot.empty() &&
            osgDB::Registry::instance()->getReaderWriterForExtension(extensionWithoutDot) != nullptr;
+}
+
+bool isModelRuntimeSupported(const std::string &path) {
+    return isModelRuntimeSupportedExtension(normalizedLowerExtension(path));
 }
 
 std::optional<DataSourceDescriptor> inspectModelSource(const std::string &path, bool runtimeSupported) {
@@ -100,6 +103,25 @@ const char *dataSourceKindName(DataSourceKind kind) {
 }
 
 } // namespace
+
+std::vector<std::string> DataImporter::supportedModelExtensions() {
+    std::vector<std::string> extensions;
+    extensions.reserve(std::size(kSupportedModelExtensions));
+    for (const char *extension : kSupportedModelExtensions) {
+        extensions.emplace_back(extension);
+    }
+    return extensions;
+}
+
+std::vector<std::string> DataImporter::availableRuntimeModelExtensions() {
+    std::vector<std::string> extensions;
+    for (const char *extension : kSupportedModelExtensions) {
+        if (isModelRuntimeSupportedExtension(extension)) {
+            extensions.emplace_back(extension);
+        }
+    }
+    return extensions;
+}
 
 std::shared_ptr<Layer> DataImporter::import(const std::string &path) const {
     const bool modelPath = isModelExtension(path);

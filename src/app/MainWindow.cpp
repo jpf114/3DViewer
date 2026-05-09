@@ -16,6 +16,7 @@
 
 using namespace Qt::Literals::StringLiterals;
 
+#include "data/DataImporter.h"
 #include "globe/GlobeWidget.h"
 #include "layers/Layer.h"
 #include "tools/ToolManager.h"
@@ -27,6 +28,14 @@ using namespace Qt::Literals::StringLiterals;
 namespace {
 constexpr int kMaxRecentFiles = 5;
 constexpr const char *kRecentFilesKey = "recentFiles";
+
+QString modelFilterText() {
+    QStringList patterns;
+    for (const auto &extension : DataImporter::supportedModelExtensions()) {
+        patterns.append(QString("*%1").arg(QString::fromStdString(extension)));
+    }
+    return QString(u"三维模型 (%1)"_s).arg(patterns.join(' '));
+}
 
 bool splitKeyValue(const QString &line, QString *key, QString *value) {
     int separator = line.indexOf(':');
@@ -75,7 +84,8 @@ MainWindow::MainWindow(QWidget *parent)
     importAction->setShortcut(QKeySequence::Open);
     connect(importAction, &QAction::triggered, this, [this]() {
         const QString filter =
-            u"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;三维模型 (*.obj *.stl *.3ds);;所有文件 (*)"_s;
+            QString(u"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;%1;;所有文件 (*)"_s)
+                .arg(modelFilterText());
         const QString path = QFileDialog::getOpenFileName(this, u"导入数据"_s, QString(), filter);
         if (!path.isEmpty()) {
             emit importDataRequested(path);

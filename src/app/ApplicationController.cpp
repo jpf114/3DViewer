@@ -55,6 +55,18 @@ QString utf8(const std::string &s) {
     return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
+QString modelFormatText() {
+    const auto runtimeExtensions = DataImporter::availableRuntimeModelExtensions();
+    const auto declaredExtensions = DataImporter::supportedModelExtensions();
+    const auto &extensions = runtimeExtensions.empty() ? declaredExtensions : runtimeExtensions;
+
+    QStringList items;
+    for (const auto &extension : extensions) {
+        items.append(QString::fromStdString(extension).remove('.').toUpper());
+    }
+    return items.join('/');
+}
+
 QStringList supportedDirectoryImportFilters() {
     return {
         "*.shp", "*.SHP",
@@ -190,8 +202,8 @@ void ApplicationController::importFile(const std::string &path) {
                 &window_,
                 u"导入失败"_s,
                 QString(
-                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 OBJ/STL/3DS 三维模型。"_s)
-                    .arg(utf8(importPath)));
+                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 %2 三维模型。"_s)
+                    .arg(utf8(importPath), modelFormatText()));
             return;
         }
 

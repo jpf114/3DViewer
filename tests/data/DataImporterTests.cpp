@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <osgDB/Registry>
+#include <algorithm>
 
 #include "data/DataImporter.h"
 #include "data/DataSourceDescriptor.h"
@@ -57,6 +58,22 @@ bool verifyUnsupported(DataImporter &importer,
 
 int main() {
     DataImporter importer;
+    const auto supportedExtensions = DataImporter::supportedModelExtensions();
+    if (supportedExtensions.size() != 3 ||
+        supportedExtensions[0] != ".obj" ||
+        supportedExtensions[1] != ".stl" ||
+        supportedExtensions[2] != ".3ds") {
+        std::cerr << "Expected supported model extensions to be .obj/.stl/.3ds.\n";
+        return EXIT_FAILURE;
+    }
+
+    const auto runtimeExtensions = DataImporter::availableRuntimeModelExtensions();
+    for (const auto &extension : runtimeExtensions) {
+        if (std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) == supportedExtensions.end()) {
+            std::cerr << "Expected runtime model extensions to be a subset of declared model extensions.\n";
+            return EXIT_FAILURE;
+        }
+    }
 
     if (importer.import("definitely-missing-dataset.xyz")) {
         std::cerr << "Expected missing file import to fail.\n";

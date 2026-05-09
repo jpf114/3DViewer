@@ -1,6 +1,8 @@
 add_executable(ApplicationSmokeTests
     app/ApplicationSmokeTests.cpp
     ../src/app/MainWindow.cpp
+    ../src/data/DataImporter.cpp
+    ../src/data/GdalDatasetInspector.cpp
     ../src/globe/GlobeWidget.cpp
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
