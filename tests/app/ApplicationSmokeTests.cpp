@@ -9,9 +9,12 @@
 #include <QKeyEvent>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QTreeWidget>
 
 #include "app/MainWindow.h"
 #include "data/DataSourceDescriptor.h"
+#include "layers/LayerTypes.h"
+#include "ui/LayerTreeDock.h"
 #include "ui/PropertyDock.h"
 
 namespace {
@@ -208,6 +211,35 @@ int main(int argc, char **argv) {
     dock.clearLayerProperties();
     if (!require(!dock.findChild<QDoubleSpinBox *>("modelScaleSpin")->isVisible(),
                  "model placement controls should hide after clearing properties")) {
+        return EXIT_FAILURE;
+    }
+
+    LayerTreeDock layerDock;
+    auto *tree = layerDock.tree();
+    if (!require(tree != nullptr, "layer tree widget should exist")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(tree->topLevelItemCount() == 1, "layer tree should show placeholder when empty")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(layerDock.currentLayerId().isEmpty(), "placeholder row should not expose a layer id")) {
+        return EXIT_FAILURE;
+    }
+
+    layerDock.addLayer("measurement-1", "Measure 1", true, LayerKind::Measurement);
+    if (!require(tree->topLevelItemCount() == 1, "adding first layer should replace placeholder")) {
+        return EXIT_FAILURE;
+    }
+    layerDock.selectLayer("measurement-1");
+    if (!require(layerDock.currentLayerId() == "measurement-1", "selectLayer should focus the real layer item")) {
+        return EXIT_FAILURE;
+    }
+
+    layerDock.removeLayer("measurement-1");
+    if (!require(tree->topLevelItemCount() == 1, "removing last layer should restore placeholder")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(layerDock.currentLayerId().isEmpty(), "placeholder should clear current layer id after removal")) {
         return EXIT_FAILURE;
     }
 

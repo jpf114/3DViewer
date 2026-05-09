@@ -3,6 +3,7 @@
 #include <QDockWidget>
 
 class QTreeWidget;
+class QTreeWidgetItem;
 
 enum class LayerKind;
 
@@ -23,9 +24,13 @@ signals:
     void layerOrderChanged(const QStringList &orderedLayerIds);
     void removeLayerRequested(const QString &layerId);
     void zoomToLayerRequested(const QString &layerId);
+    void editMeasurementRequested(const QString &layerId);
 
 private:
     void emitLayerOrderFromTree();
+    void ensurePlaceholderItem();
+    void clearPlaceholderItem();
+    bool isPlaceholderItem(QTreeWidgetItem *item) const;
 
     QTreeWidget *tree_;
 };

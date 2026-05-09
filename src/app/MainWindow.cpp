@@ -174,6 +174,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(layerDock_, &LayerTreeDock::layerOrderChanged, this, &MainWindow::layerOrderChanged);
     connect(layerDock_, &LayerTreeDock::removeLayerRequested, this, &MainWindow::removeLayerRequested);
     connect(layerDock_, &LayerTreeDock::zoomToLayerRequested, this, &MainWindow::zoomToLayerRequested);
+    connect(layerDock_, &LayerTreeDock::editMeasurementRequested, this, [this](const QString &) {
+        if (editMeasureAction_ != nullptr && editMeasureAction_->isEnabled()) {
+            emit editSelectedMeasurementRequested();
+        }
+    });
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);
     connect(propertyDock_, &PropertyDock::bandMappingChanged, this, &MainWindow::bandMappingChanged);
     connect(propertyDock_, &PropertyDock::modelPlacementChanged, this, &MainWindow::modelPlacementChanged);
