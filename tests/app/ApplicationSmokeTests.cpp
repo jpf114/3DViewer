@@ -367,5 +367,66 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    MainWindow removeWindow;
+    LayerManager removeLayerManager;
+    DataImporter removeImporter;
+    ApplicationController removeController(
+        removeWindow,
+        removeWindow.globeWidget()->sceneController(),
+        removeLayerManager,
+        removeImporter);
+
+    auto removableLayer = std::make_shared<Layer>(
+        "measurement-remove-1",
+        QString::fromUtf8(u8"待删除量测").toStdString(),
+        "memory://measurement-remove-1",
+        LayerKind::Measurement);
+    MeasurementLayerData removableMeasurement;
+    removableMeasurement.kind = MeasurementKind::Distance;
+    removableMeasurement.points.push_back({120.0, 30.0});
+    removableMeasurement.points.push_back({121.0, 31.0});
+    removableMeasurement.lengthMeters = 1200.0;
+    removableLayer->setMeasurementData(removableMeasurement);
+    if (!require(removeLayerManager.addLayer(removableLayer), "removable layer should be added into layer manager")) {
+        return EXIT_FAILURE;
+    }
+    removeWindow.addLayerRow(*removableLayer);
+    removeWindow.selectLayerRow(removableLayer->id());
+    removeWindow.showLayerProperties(
+        QString::fromStdString(removableLayer->id()),
+        QString::fromStdString(removableLayer->name()),
+        QString::fromUtf8(u8"量测"),
+        QString::fromStdString(removableLayer->sourceUri()),
+        true,
+        1.0,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        removableMeasurement);
+    auto *removeEditAction = removeWindow.findChild<QAction *>("editMeasureAction");
+    if (!require(removeEditAction != nullptr && removeEditAction->isEnabled(),
+                 "measurement edit action should enable before removing selected layer")) {
+        return EXIT_FAILURE;
+    }
+
+    removeController.removeLayer(removableLayer->id());
+    if (!require(removeLayerManager.layers().empty(), "layer manager should remove selected layer")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(removeWindow.currentLayerId().isEmpty(),
+                 "current selected layer should clear after removing selected layer")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!removeEditAction->isEnabled(),
+                 "measurement edit action should reset after removing selected layer")) {
+        return EXIT_FAILURE;
+    }
+    auto *removeTextEdit = removeWindow.findChild<QTextEdit *>();
+    if (!require(removeTextEdit != nullptr &&
+                     removeTextEdit->toPlainText().contains(QString::fromUtf8(u8"未选择图层")),
+                 "property dock should return to unselected placeholder after removing selected layer")) {
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
