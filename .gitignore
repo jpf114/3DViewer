@@ -18,3 +18,6 @@ data/image/*.zip
 data/image/*.html
 data/image/*.txt
 data/image/*.png
+!data/model/*.obj
+!data/model/*.stl
+!data/model/*.3ds
