@@ -9,6 +9,8 @@
 #include <QDir>
 #include <QFile>
 #include <QKeyEvent>
+#include <QMenu>
+#include <QMenuBar>
 #include <QTemporaryDir>
 #include <QTableWidget>
 #include <QTextEdit>
@@ -327,6 +329,41 @@ int main(int argc, char **argv) {
     }
     if (!require(persistedTree->topLevelItem(0)->text(0) == QString::fromUtf8(u8"恢复图层"),
                  "layer tree should show persisted layer name")) {
+        return EXIT_FAILURE;
+    }
+
+    window.setRecentFiles({
+        "D:/data/a.tif",
+        "D:/data/b.tif",
+        "D:/data/a.tif",
+        "D:/data/c.tif",
+        "D:/data/d.tif",
+        "D:/data/e.tif",
+        "D:/data/f.tif",
+    });
+    QAction *recentMenuAction = nullptr;
+    for (QAction *action : window.menuBar()->actions()) {
+        if (action && action->menu() && action->text().contains(QString::fromUtf8(u8"文件"))) {
+            for (QAction *child : action->menu()->actions()) {
+                if (child && child->menu() && child->text().contains(QString::fromUtf8(u8"最近打开"))) {
+                    recentMenuAction = child;
+                    break;
+                }
+            }
+        }
+    }
+    if (!require(recentMenuAction != nullptr && recentMenuAction->menu() != nullptr,
+                 "recent files submenu should exist")) {
+        return EXIT_FAILURE;
+    }
+    const auto recentActions = recentMenuAction->menu()->actions();
+    if (!require(recentActions.size() == 5, "recent files should be capped at five unique entries")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(recentActions[0]->text().contains("D:/data/a.tif") &&
+                     recentActions[1]->text().contains("D:/data/b.tif") &&
+                     recentActions[4]->text().contains("D:/data/e.tif"),
+                 "recent files order should stay stable after sanitizing duplicates")) {
         return EXIT_FAILURE;
     }
 

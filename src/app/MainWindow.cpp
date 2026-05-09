@@ -27,6 +27,20 @@ namespace {
 constexpr int kMaxRecentFiles = 5;
 constexpr const char *kRecentFilesKey = "recentFiles";
 
+QStringList sanitizeRecentFiles(const QStringList &files) {
+    QStringList sanitized;
+    for (const QString &file : files) {
+        if (file.isEmpty() || sanitized.contains(file)) {
+            continue;
+        }
+        sanitized.append(file);
+        if (sanitized.size() >= kMaxRecentFiles) {
+            break;
+        }
+    }
+    return sanitized;
+}
+
 QString modelFilterText() {
     QStringList patterns;
     auto extensions = DataImporter::availableRuntimeModelExtensions();
@@ -106,7 +120,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     recentMenu_ = fileMenu->addMenu(QString::fromUtf8(u8"最近打开"));
     QSettings settings;
-    recentFiles_ = settings.value(kRecentFilesKey).toStringList();
+    recentFiles_ = sanitizeRecentFiles(settings.value(kRecentFilesKey).toStringList());
+    settings.setValue(kRecentFilesKey, recentFiles_);
     updateRecentMenu();
 
     fileMenu->addSeparator();
@@ -350,9 +365,9 @@ void MainWindow::refreshToolActionStates() {
 }
 
 void MainWindow::setRecentFiles(const QStringList &files) {
-    recentFiles_ = files;
+    recentFiles_ = sanitizeRecentFiles(files);
     QSettings settings;
-    settings.setValue(kRecentFilesKey, files);
+    settings.setValue(kRecentFilesKey, recentFiles_);
     updateRecentMenu();
 }
 
