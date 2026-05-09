@@ -21,9 +21,9 @@ QString formatDistance(double meters) {
 
 QString formatArea(double squareMeters) {
     if (squareMeters >= 1000000.0) {
-        return QString(u"%1 km²"_s).arg(squareMeters / 1000000.0, 0, 'f', 3);
+        return QString::fromUtf8(u8"%1 km²").arg(squareMeters / 1000000.0, 0, 'f', 3);
     }
-    return QString(u"%1 m²"_s).arg(squareMeters, 0, 'f', 1);
+    return QString::fromUtf8(u8"%1 m²").arg(squareMeters, 0, 'f', 1);
 }
 
 QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points) {
