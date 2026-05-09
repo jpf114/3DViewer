@@ -17,8 +17,6 @@
 #include <algorithm>
 #include <vector>
 
-using namespace Qt::Literals::StringLiterals;
-
 #include "app/MainWindow.h"
 #include "data/DataImporter.h"
 #include "data/LayerConfig.h"
@@ -41,22 +39,22 @@ QString utf8(const std::string &text) {
 QString layerKindToText(LayerKind kind) {
     switch (kind) {
     case LayerKind::Imagery:
-        return u"影像"_s;
+        return QString::fromUtf8(u8"影像");
     case LayerKind::Elevation:
-        return u"高程"_s;
+        return QString::fromUtf8(u8"高程");
     case LayerKind::Vector:
-        return u"矢量"_s;
+        return QString::fromUtf8(u8"矢量");
     case LayerKind::Measurement:
-        return u"量测"_s;
+        return QString::fromUtf8(u8"量测");
     case LayerKind::Model:
-        return u"三维模型"_s;
+        return QString::fromUtf8(u8"三维模型");
     case LayerKind::Chart:
-        return u"海图"_s;
+        return QString::fromUtf8(u8"海图");
     case LayerKind::Scientific:
-        return u"科学数据"_s;
+        return QString::fromUtf8(u8"科学数据");
     }
 
-    return u"未知"_s;
+    return QString::fromUtf8(u8"未知");
 }
 
 QString modelFormatText() {
@@ -110,7 +108,9 @@ std::optional<LayerKind> parseLayerKind(const std::string &kind) {
 }
 
 QString measurementLayerBaseName(MeasurementKind kind) {
-    return kind == MeasurementKind::Area ? u"测面结果"_s : u"测距结果"_s;
+    return kind == MeasurementKind::Area
+        ? QString::fromUtf8(u8"测面结果")
+        : QString::fromUtf8(u8"测距结果");
 }
 
 int nextMeasurementIndex(const LayerManager &layerManager, MeasurementKind kind) {
@@ -151,9 +151,9 @@ std::optional<GeographicBounds> measurementBounds(const MeasurementLayerData &da
 }
 
 QString measurementTempPath(const QString &layerId) {
-    const QString dirPath = QDir::temp().filePath(u"3dviewer_measurements"_s);
+    const QString dirPath = QDir::temp().filePath(QString::fromUtf8(u8"3dviewer_measurements"));
     QDir().mkpath(dirPath);
-    return QDir(dirPath).filePath(layerId + u".geojson"_s);
+    return QDir(dirPath).filePath(layerId + QString::fromUtf8(u8".geojson"));
 }
 
 bool writeMeasurementGeoJson(const QString &path, const MeasurementLayerData &data) {
@@ -285,12 +285,13 @@ void ApplicationController::importFile(const std::string &path) {
     if (dir.exists()) {
         const QFileInfoList vectorEntries = dir.entryInfoList(supportedDirectoryImportFilters(), QDir::Files);
         if (vectorEntries.isEmpty()) {
-            window_.statusBar()->showMessage(u"目录中未找到可导入的矢量数据文件。"_s, 3000);
+            window_.statusBar()->showMessage(
+                QString::fromUtf8(u8"目录中未找到可导入的矢量数据文件。"),
+                3000);
             QMessageBox::warning(
                 &window_,
-                u"导入失败"_s,
-                QString(
-                    u"目录中未找到支持的矢量文件：\n%1\n\n支持格式：Shapefile (.shp)、GeoJSON (.geojson/.json)、GeoPackage (.gpkg)、KML (.kml)、GML (.gml)"_s)
+                QString::fromUtf8(u8"导入失败"),
+                QString::fromUtf8(u8"目录中未找到支持的矢量文件：\n%1\n\n支持格式：Shapefile (.shp)、GeoJSON (.geojson/.json)、GeoPackage (.gpkg)、KML (.kml)、GML (.gml)")
                     .arg(qPath));
             return;
         }
@@ -303,26 +304,28 @@ void ApplicationController::importFile(const std::string &path) {
 
     for (const auto &importPath : pathsToImport) {
         spdlog::info("ApplicationController: importing '{}'", importPath);
-        window_.statusBar()->showMessage(QString(u"正在导入 %1..."_s).arg(utf8(importPath)));
+        window_.statusBar()->showMessage(
+            QString::fromUtf8(u8"正在导入 %1...").arg(utf8(importPath)));
 
         const auto layer = importer_.import(importPath);
         if (!layer) {
             spdlog::warn("ApplicationController: import failed for '{}'", importPath);
-            window_.statusBar()->showMessage(u"导入失败。"_s, 3000);
+            window_.statusBar()->showMessage(QString::fromUtf8(u8"导入失败。"), 3000);
             QMessageBox::warning(
                 &window_,
-                u"导入失败"_s,
-                QString(
-                    u"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 %2 三维模型。"_s)
+                QString::fromUtf8(u8"导入失败"),
+                QString::fromUtf8(u8"无法导入或当前版本暂不支持显示：\n%1\n\n支持格式包括：GeoTIFF/TIFF、IMG、ASC、SRTM/HGT、DEM、VRT、Shapefile、GeoJSON/JSON、GeoPackage、KML、GML，以及 %2 三维模型。")
                     .arg(utf8(importPath), modelFormatText()));
             return;
         }
 
         if (!layerManager_.addLayer(layer)) {
             spdlog::warn("ApplicationController: duplicate layer for '{}'", importPath);
-            window_.statusBar()->showMessage(u"图层已存在。"_s, 3000);
-            QMessageBox::information(&window_, u"已导入"_s,
-                                     QString(u"该文件已经导入：\n%1"_s).arg(utf8(importPath)));
+            window_.statusBar()->showMessage(QString::fromUtf8(u8"图层已存在。"), 3000);
+            QMessageBox::information(
+                &window_,
+                QString::fromUtf8(u8"已导入"),
+                QString::fromUtf8(u8"该文件已经导入：\n%1").arg(utf8(importPath)));
             return;
         }
 
@@ -332,7 +335,7 @@ void ApplicationController::importFile(const std::string &path) {
         spdlog::info("ApplicationController: layer '{}' imported successfully", layer->id());
 
         window_.statusBar()->showMessage(
-            QString(u"已导入：%1 (%2)"_s).arg(utf8(layer->name())).arg(layerKindToText(layer->kind())),
+            QString::fromUtf8(u8"已导入：%1 (%2)").arg(utf8(layer->name())).arg(layerKindToText(layer->kind())),
             5000);
 
         if (const auto bounds = layer->geographicBounds(); bounds.has_value() && bounds->isValid()) {
@@ -345,7 +348,7 @@ void ApplicationController::showLayerDetails(const std::string &layerId) {
     const auto layer = layerManager_.findById(layerId);
     if (!layer) {
         sceneController_.setSelectedLayer({});
-        window_.showLayerDetails(u"未找到图层。"_s);
+        window_.showLayerDetails(QString::fromUtf8(u8"未找到图层。"));
         window_.clearLayerProperties();
         return;
     }
@@ -390,24 +393,24 @@ void ApplicationController::applyLayerOrderFromUi(const QStringList &orderedIds)
 void ApplicationController::handleTerrainPick(const PickResult &pick) {
     if (!pick.hit) {
         sceneController_.setSelectedLayer({});
-        window_.showLayerDetails(u"拾取：光标下无地形。"_s);
+        window_.showLayerDetails(QString::fromUtf8(u8"拾取：光标下无地形。"));
         return;
     }
 
     QStringList lines;
-    lines.append(QString(u"经度：%1"_s).arg(pick.longitude, 0, 'f', 6));
-    lines.append(QString(u"纬度：%1"_s).arg(pick.latitude, 0, 'f', 6));
-    lines.append(QString(u"高程(近似)：%1"_s).arg(pick.elevation, 0, 'f', 2));
+    lines.append(QString::fromUtf8(u8"经度：%1").arg(pick.longitude, 0, 'f', 6));
+    lines.append(QString::fromUtf8(u8"纬度：%1").arg(pick.latitude, 0, 'f', 6));
+    lines.append(QString::fromUtf8(u8"高程(近似)：%1").arg(pick.elevation, 0, 'f', 2));
     if (!pick.layerId.empty()) {
         sceneController_.setSelectedLayer(pick.layerId);
-        lines.append(QString(u"图层：%1"_s).arg(utf8(pick.displayText)));
+        lines.append(QString::fromUtf8(u8"图层：%1").arg(utf8(pick.displayText)));
     }
 
     if (!pick.featureAttributes.empty()) {
         lines.append("");
-        lines.append(u"--- 要素属性 ---"_s);
+        lines.append(QString::fromUtf8(u8"--- 要素属性 ---"));
         for (const auto &attr : pick.featureAttributes) {
-            lines.append(QString(u"  %1：%2"_s).arg(utf8(attr.name)).arg(utf8(attr.value)));
+            lines.append(QString::fromUtf8(u8"  %1：%2").arg(utf8(attr.name)).arg(utf8(attr.value)));
         }
     }
 
@@ -424,7 +427,7 @@ void ApplicationController::removeLayer(const std::string &layerId) {
     if (layer && layer->kind() == LayerKind::Measurement) {
         QFile::remove(utf8(layer->sourceUri()));
     }
-    window_.showLayerDetails(u"未选择图层。"_s);
+    window_.showLayerDetails(QString::fromUtf8(u8"未选择图层。"));
     window_.clearLayerProperties();
 }
 
@@ -495,14 +498,14 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
         return;
     }
 
-    const QString layerId = QString(u"measurement-%1"_s).arg(QDateTime::currentMSecsSinceEpoch());
+    const QString layerId = QString("measurement-%1").arg(QDateTime::currentMSecsSinceEpoch());
     const QString sourcePath = measurementTempPath(layerId);
     if (!writeMeasurementGeoJson(sourcePath, data)) {
         window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果保存失败。"), 3000);
         return;
     }
 
-    const QString layerName = QString(u"%1 %2"_s)
+    const QString layerName = QString("%1 %2")
         .arg(measurementLayerBaseName(data.kind))
         .arg(nextMeasurementIndex(layerManager_, data.kind));
 
@@ -596,24 +599,28 @@ void ApplicationController::resetView() {
 void ApplicationController::captureScreenshot() {
     const QImage image = sceneController_.captureImage();
     if (image.isNull()) {
-        window_.statusBar()->showMessage(u"截图失败：无法捕获画面。"_s, 3000);
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"截图失败：无法捕获画面。"), 3000);
         return;
     }
 
-    const QString defaultPath = QDir::homePath() + u"/3DViewer_screenshot.png"_s;
+    const QString defaultPath = QDir::homePath() + QString::fromUtf8(u8"/3DViewer_screenshot.png");
     const QString path = QFileDialog::getSaveFileName(
-        &window_, u"保存截图"_s, defaultPath,
-        u"PNG 图像 (*.png);;JPEG 图像 (*.jpg);;BMP 图像 (*.bmp)"_s);
+        &window_,
+        QString::fromUtf8(u8"保存截图"),
+        defaultPath,
+        QString::fromUtf8(u8"PNG 图像 (*.png);;JPEG 图像 (*.jpg);;BMP 图像 (*.bmp)"));
     if (path.isEmpty()) {
         return;
     }
 
     if (image.save(path)) {
         spdlog::info("ApplicationController: screenshot saved to '{}'", path.toStdString());
-        window_.statusBar()->showMessage(QString(u"截图已保存：%1"_s).arg(path), 5000);
+        window_.statusBar()->showMessage(
+            QString::fromUtf8(u8"截图已保存：%1").arg(path),
+            5000);
     } else {
         spdlog::warn("ApplicationController: failed to save screenshot to '{}'", path.toStdString());
-        window_.statusBar()->showMessage(u"截图保存失败。"_s, 3000);
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"截图保存失败。"), 3000);
     }
 }
 
@@ -650,7 +657,8 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
         if (const auto kind = parseLayerKind(entry.kind); kind.has_value() && !isRenderableLayerKind(*kind)) {
             spdlog::warn("ApplicationController: skipping unsupported persisted layer '{}' kind={}", entry.id, entry.kind);
             window_.statusBar()->showMessage(
-                QString(u"已跳过未支持的持久化图层：%1"_s).arg(QString::fromStdString(entry.name)), 5000);
+                QString::fromUtf8(u8"已跳过未支持的持久化图层：%1").arg(QString::fromStdString(entry.name)),
+                5000);
             continue;
         }
 
@@ -666,7 +674,8 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
         if (!layer) {
             spdlog::warn("ApplicationController: failed to load persisted layer '{}'", entry.id);
             window_.statusBar()->showMessage(
-                QString(u"无法加载持久化图层：%1"_s).arg(QString::fromStdString(entry.name)), 5000);
+                QString::fromUtf8(u8"无法加载持久化图层：%1").arg(QString::fromStdString(entry.name)),
+                5000);
             continue;
         }
 
