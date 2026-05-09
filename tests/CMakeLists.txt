@@ -2,6 +2,7 @@ add_executable(ApplicationSmokeTests
     app/ApplicationSmokeTests.cpp
     ../src/app/ApplicationController.cpp
     ../src/app/MainWindow.cpp
+    ../src/app/ScreenshotSave.cpp
     ../src/data/DataImporter.cpp
     ../src/data/GdalDatasetInspector.cpp
     ../src/data/LayerConfig.cpp
@@ -26,6 +27,16 @@ target_link_libraries(ApplicationSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Widg
 threeviewer_runtime_post_build(ApplicationSmokeTests)
 
 add_test(NAME ApplicationSmokeTests COMMAND ApplicationSmokeTests)
+
+add_executable(ScreenshotSaveTests
+    app/ScreenshotSaveTests.cpp
+    ../src/app/ScreenshotSave.cpp
+)
+
+target_include_directories(ScreenshotSaveTests PRIVATE ../src)
+target_link_libraries(ScreenshotSaveTests PRIVATE Qt6::Core)
+
+add_test(NAME ScreenshotSaveTests COMMAND $<TARGET_FILE:ScreenshotSaveTests>)
 
 add_executable(SceneControllerTests
     globe/SceneControllerTests.cpp

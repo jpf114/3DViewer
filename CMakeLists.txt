@@ -45,6 +45,7 @@ add_executable(ThreeDViewer
     src/main.cpp
     src/app/ApplicationController.cpp
     src/app/MainWindow.cpp
+    src/app/ScreenshotSave.cpp
     src/common/Logging.cpp
     src/data/DataImporter.cpp
     src/data/GdalDatasetInspector.cpp

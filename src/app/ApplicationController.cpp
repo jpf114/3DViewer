@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "app/MainWindow.h"
+#include "app/ScreenshotSave.h"
 #include "data/DataImporter.h"
 #include "data/LayerConfig.h"
 #include "data/MapConfig.h"
@@ -603,23 +604,25 @@ void ApplicationController::captureScreenshot() {
         return;
     }
 
-    const QString defaultPath = QDir::homePath() + QString::fromUtf8(u8"/3DViewer_screenshot.png");
+    QString selectedFilter = QString::fromUtf8(u8"PNG 图像 (*.png)");
     const QString path = QFileDialog::getSaveFileName(
         &window_,
         QString::fromUtf8(u8"保存截图"),
-        defaultPath,
-        QString::fromUtf8(u8"PNG 图像 (*.png);;JPEG 图像 (*.jpg);;BMP 图像 (*.bmp)"));
+        screenshot::defaultSavePath(),
+        QString::fromUtf8(u8"PNG 图像 (*.png);;JPEG 图像 (*.jpg);;BMP 图像 (*.bmp)"),
+        &selectedFilter);
     if (path.isEmpty()) {
         return;
     }
 
-    if (image.save(path)) {
-        spdlog::info("ApplicationController: screenshot saved to '{}'", path.toStdString());
+    const QString normalizedPath = screenshot::normalizeSavePath(path, selectedFilter);
+    if (image.save(normalizedPath)) {
+        spdlog::info("ApplicationController: screenshot saved to '{}'", normalizedPath.toStdString());
         window_.statusBar()->showMessage(
-            QString::fromUtf8(u8"截图已保存：%1").arg(path),
+            QString::fromUtf8(u8"截图已保存：%1").arg(normalizedPath),
             5000);
     } else {
-        spdlog::warn("ApplicationController: failed to save screenshot to '{}'", path.toStdString());
+        spdlog::warn("ApplicationController: failed to save screenshot to '{}'", normalizedPath.toStdString());
         window_.statusBar()->showMessage(QString::fromUtf8(u8"截图保存失败。"), 3000);
     }
 }
