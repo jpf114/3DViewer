@@ -76,6 +76,7 @@ struct SceneController::Impl {
     std::unordered_map<std::string, osg::ref_ptr<osg::Node>> renderModelNodes;
     std::vector<std::string> orderedLayerIds;
     std::vector<std::shared_ptr<Layer>> pendingLayers;
+    std::string selectedLayerId;
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
     osg::ref_ptr<osg::Group> rootNode;
@@ -396,14 +397,32 @@ osg::ref_ptr<osg::Node> createModelSceneNode(Layer &layer, GeographicBounds *bou
     return geoTransform;
 }
 
-void syncVisibleState(osgEarth::Layer *sceneLayer, const Layer &layer) {
+float effectiveLayerOpacity(const Layer &layer,
+                            const std::string &layerId,
+                            const std::string &selectedLayerId,
+                            bool measurementSelectionActive) {
+    double opacity = layer.opacity();
+    if (measurementSelectionActive && layer.kind() == LayerKind::Measurement && layerId != selectedLayerId) {
+        opacity = std::min(opacity, 0.25);
+    } else if (measurementSelectionActive && layer.kind() == LayerKind::Measurement && layerId == selectedLayerId) {
+        opacity = std::max(opacity, 0.95);
+    }
+
+    return static_cast<float>(std::clamp(opacity, 0.0, 1.0));
+}
+
+void syncVisibleState(osgEarth::Layer *sceneLayer,
+                      const Layer &layer,
+                      const std::string &layerId,
+                      const std::string &selectedLayerId,
+                      bool measurementSelectionActive) {
     auto *visibleLayer = dynamic_cast<osgEarth::VisibleLayer *>(sceneLayer);
     if (visibleLayer == nullptr) {
         return;
     }
 
     visibleLayer->setVisible(layer.visible());
-    visibleLayer->setOpacity(static_cast<float>(layer.opacity()));
+    visibleLayer->setOpacity(effectiveLayerOpacity(layer, layerId, selectedLayerId, measurementSelectionActive));
 }
 
 void updateViewport(osgViewer::Viewer &viewer, osgViewer::GraphicsWindow &graphicsWindow, int width, int height) {
@@ -467,7 +486,7 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
 
     spdlog::info("SceneController: adding layer '{}' to map", layer->id());
 
-    syncVisibleState(sceneLayer.get(), *layer);
+    syncVisibleState(sceneLayer.get(), *layer, layer->id(), impl_->selectedLayerId, isMeasurementLayerSelected());
     try {
         impl_->map->addLayer(sceneLayer.get());
     } catch (const std::exception &e) {
@@ -476,6 +495,9 @@ void SceneController::addLayer(const std::shared_ptr<Layer> &layer) {
     }
 
     impl_->renderLayers[layer->id()] = sceneLayer;
+    if (layer->kind() == LayerKind::Measurement) {
+        refreshMeasurementSelection();
+    }
     spdlog::info("SceneController: added layer '{}' to scene", layer->id());
 }
 
@@ -698,6 +720,11 @@ void SceneController::resize(int /*width*/, int /*height*/) {
     updateViewport(*impl_->viewer, *impl_->graphicsWindow, pixelW, pixelH);
 }
 
+void SceneController::setSelectedLayer(const std::string &id) {
+    impl_->selectedLayerId = id;
+    refreshMeasurementSelection();
+}
+
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     const auto modelIt = impl_->renderModelNodes.find(layer->id());
     if (modelIt != impl_->renderModelNodes.end()) {
@@ -717,7 +744,7 @@ void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
         return;
     }
 
-    syncVisibleState(it->second.get(), *layer);
+    syncVisibleState(it->second.get(), *layer, layer->id(), impl_->selectedLayerId, isMeasurementLayerSelected());
 }
 
 void SceneController::updateImageLayerBands(const std::shared_ptr<Layer> &layer) {
@@ -774,7 +801,7 @@ void SceneController::updateImageLayerBands(const std::shared_ptr<Layer> &layer)
     auto imageLayer = osg::ref_ptr<osgEarth::GDALImageLayer>(new osgEarth::GDALImageLayer());
     imageLayer->setName(layer->name());
     imageLayer->setURL(osgEarth::URI(vrtXml));
-    syncVisibleState(imageLayer.get(), *layer);
+    syncVisibleState(imageLayer.get(), *layer, layer->id(), impl_->selectedLayerId, isMeasurementLayerSelected());
     impl_->map->addLayer(imageLayer.get());
     impl_->renderLayers[layer->id()] = imageLayer;
     spdlog::info("SceneController: updated band mapping for '{}' to R={} G={} B={}", layer->id(), r, g, b);
@@ -906,6 +933,28 @@ void SceneController::flushPendingLayers() {
     impl_->pendingLayers.clear();
     for (const auto &layer : pending) {
         addLayer(layer);
+    }
+}
+
+bool SceneController::isMeasurementLayerSelected() const {
+    const auto it = impl_->appLayers.find(impl_->selectedLayerId);
+    return it != impl_->appLayers.end() && it->second && it->second->kind() == LayerKind::Measurement;
+}
+
+void SceneController::refreshMeasurementSelection() {
+    const bool measurementSelectionActive = isMeasurementLayerSelected();
+    for (const auto &[layerId, renderLayer] : impl_->renderLayers) {
+        const auto appLayerIt = impl_->appLayers.find(layerId);
+        if (appLayerIt == impl_->appLayers.end() || !appLayerIt->second) {
+            continue;
+        }
+
+        const auto &appLayer = appLayerIt->second;
+        if (appLayer->kind() != LayerKind::Measurement) {
+            continue;
+        }
+
+        syncVisibleState(renderLayer.get(), *appLayer, layerId, impl_->selectedLayerId, measurementSelectionActive);
     }
 }
 

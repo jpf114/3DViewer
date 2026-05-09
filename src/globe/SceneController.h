@@ -40,6 +40,7 @@ public:
     void removeLayer(const std::string &id);
     std::size_t renderedLayerCount() const;
     void resize(int width, int height);
+    void setSelectedLayer(const std::string &id);
     void syncLayerState(const std::shared_ptr<Layer> &layer);
     void updateImageLayerBands(const std::shared_ptr<Layer> &layer);
     void initializeDefaultScene(int width, int height);
@@ -51,6 +52,8 @@ public:
 
 private:
     void flushPendingLayers();
+    bool isMeasurementLayerSelected() const;
+    void refreshMeasurementSelection();
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

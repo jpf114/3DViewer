@@ -335,11 +335,13 @@ void ApplicationController::importFile(const std::string &path) {
 void ApplicationController::showLayerDetails(const std::string &layerId) {
     const auto layer = layerManager_.findById(layerId);
     if (!layer) {
+        sceneController_.setSelectedLayer({});
         window_.showLayerDetails(u"未找到图层。"_s);
         window_.clearLayerProperties();
         return;
     }
 
+    sceneController_.setSelectedLayer(layerId);
     window_.showLayerProperties(
         utf8(layerId),
         utf8(layer->name()),
@@ -378,6 +380,7 @@ void ApplicationController::applyLayerOrderFromUi(const QStringList &orderedIds)
 
 void ApplicationController::handleTerrainPick(const PickResult &pick) {
     if (!pick.hit) {
+        sceneController_.setSelectedLayer({});
         window_.showLayerDetails(u"拾取：光标下无地形。"_s);
         return;
     }
@@ -387,6 +390,7 @@ void ApplicationController::handleTerrainPick(const PickResult &pick) {
     lines.append(QString(u"纬度：%1"_s).arg(pick.latitude, 0, 'f', 6));
     lines.append(QString(u"高程(近似)：%1"_s).arg(pick.elevation, 0, 'f', 2));
     if (!pick.layerId.empty()) {
+        sceneController_.setSelectedLayer(pick.layerId);
         lines.append(QString(u"图层：%1"_s).arg(utf8(pick.displayText)));
     }
 
@@ -404,6 +408,7 @@ void ApplicationController::handleTerrainPick(const PickResult &pick) {
 void ApplicationController::removeLayer(const std::string &layerId) {
     spdlog::info("ApplicationController: removing layer '{}'", layerId);
     const auto layer = layerManager_.findById(layerId);
+    sceneController_.setSelectedLayer({});
     sceneController_.removeLayer(layerId);
     layerManager_.removeLayer(layerId);
     window_.removeLayerRow(layerId);
