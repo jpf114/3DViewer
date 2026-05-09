@@ -132,22 +132,22 @@ QString formatMeasurementDistance(double meters) {
 
 QString formatMeasurementArea(double squareMeters) {
     if (squareMeters >= 1000000.0) {
-        return QString(u"%1 km²"_s).arg(squareMeters / 1000000.0, 0, 'f', 3);
+        return QString::fromUtf8(u8"%1 km²").arg(squareMeters / 1000000.0, 0, 'f', 3);
     }
-    return QString(u"%1 m²"_s).arg(squareMeters, 0, 'f', 1);
+    return QString::fromUtf8(u8"%1 m²").arg(squareMeters, 0, 'f', 1);
 }
 
 QString measurementDraftLabelText(const MeasurementLayerData &data) {
     if (data.kind == MeasurementKind::Area) {
         if (data.points.size() >= 3) {
-            return QString(u"面积 %1\n周长 %2"_s)
+            return QString::fromUtf8(u8"面积 %1\n周长 %2")
                 .arg(formatMeasurementArea(data.areaSquareMeters))
                 .arg(formatMeasurementDistance(data.lengthMeters));
         }
-        return QString(u"周长 %1"_s).arg(formatMeasurementDistance(data.lengthMeters));
+        return QString::fromUtf8(u8"周长 %1").arg(formatMeasurementDistance(data.lengthMeters));
     }
 
-    return QString(u"总长 %1"_s).arg(formatMeasurementDistance(data.lengthMeters));
+    return QString::fromUtf8(u8"总长 %1").arg(formatMeasurementDistance(data.lengthMeters));
 }
 
 bool measurementPointToWorld(osgEarth::MapNode *mapNode,
@@ -1293,3 +1293,4 @@ void SceneController::setBasemapConfig(const BasemapConfig &config, const std::s
     spdlog::info("SceneController: no enabled basemap found, using fallback");
     impl_->baseLayer = createFallbackBaseLayer(resourceDir);
 }
+

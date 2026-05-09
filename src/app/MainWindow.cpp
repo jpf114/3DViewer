@@ -50,12 +50,14 @@ bool splitKeyValue(const QString &line, QString *key, QString *value) {
 }
 
 void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(QString::fromUtf8(u8"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
+    propertyDock->showText(QString::fromUtf8(
+        u8"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
     statusController->setMeasurementText(QString::fromUtf8(u8"测距：未开始"));
 }
 
 void showMeasureAreaHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(QString::fromUtf8(u8"测面：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
+    propertyDock->showText(QString::fromUtf8(
+        u8"测面：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
     statusController->setMeasurementText(QString::fromUtf8(u8"测面：未开始"));
 }
 
@@ -84,7 +86,9 @@ MainWindow::MainWindow(QWidget *parent)
     importAction->setShortcut(QKeySequence::Open);
     connect(importAction, &QAction::triggered, this, [this]() {
         const QString filter =
-            QString::fromUtf8(u8"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;%1;;所有文件 (*)")
+            QString::fromUtf8(
+                u8"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;"
+                u8"矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;%1;;所有文件(*)")
                 .arg(modelFilterText());
         const QString path = QFileDialog::getOpenFileName(
             this,
