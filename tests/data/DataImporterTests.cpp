@@ -101,6 +101,32 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    const std::filesystem::path stlPath = std::filesystem::temp_directory_path() / "threeviewer-model-test.stl";
+    {
+        std::ofstream stlFile(stlPath);
+        stlFile << "solid square\n";
+        stlFile << "  facet normal 0 0 1\n";
+        stlFile << "    outer loop\n";
+        stlFile << "      vertex 0 0 0\n";
+        stlFile << "      vertex 1 0 0\n";
+        stlFile << "      vertex 0 1 0\n";
+        stlFile << "    endloop\n";
+        stlFile << "  endfacet\n";
+        stlFile << "endsolid square\n";
+    }
+    const auto stlLayer = importer.import(stlPath.string());
+    std::filesystem::remove(stlPath);
+    const bool stlSupported = osgDB::Registry::instance()->getReaderWriterForExtension("stl") != nullptr;
+    if (stlSupported) {
+        if (!stlLayer || stlLayer->kind() != LayerKind::Model) {
+            std::cerr << "Expected .stl path import to create a model layer.\n";
+            return EXIT_FAILURE;
+        }
+    } else if (stlLayer) {
+        std::cerr << "Expected .stl path import to fail when runtime reader is unavailable.\n";
+        return EXIT_FAILURE;
+    }
+
     if (!verifyUnsupported(importer, DataSourceKind::Chart, "chart")) {
         return EXIT_FAILURE;
     }
