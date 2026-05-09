@@ -384,6 +384,7 @@ void ApplicationController::showLayerDetails(const std::string &layerId) {
     const auto layer = layerManager_.findById(layerId);
     if (!layer) {
         sceneController_.setSelectedLayer({});
+        window_.clearLayerSelection();
         window_.showLayerDetails(QString::fromUtf8(u8"未找到图层。"));
         window_.clearLayerProperties();
         return;
@@ -429,6 +430,7 @@ void ApplicationController::applyLayerOrderFromUi(const QStringList &orderedIds)
 void ApplicationController::handleTerrainPick(const PickResult &pick) {
     if (!pick.hit) {
         sceneController_.setSelectedLayer({});
+        window_.clearLayerSelection();
         window_.showLayerDetails(QString::fromUtf8(u8"拾取：光标下无地形。"));
         return;
     }

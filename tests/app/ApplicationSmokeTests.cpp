@@ -284,6 +284,11 @@ int main(int argc, char **argv) {
     if (!require(layerDock.currentLayerId() == "measurement-1", "selectLayer should focus the real layer item")) {
         return EXIT_FAILURE;
     }
+    layerDock.clearSelection();
+    if (!require(layerDock.currentLayerId().isEmpty(), "clearSelection should clear current layer id")) {
+        return EXIT_FAILURE;
+    }
+    layerDock.selectLayer("measurement-1");
 
     layerDock.removeLayer("measurement-1");
     if (!require(tree->topLevelItemCount() == 1, "removing last layer should restore placeholder")) {
@@ -440,6 +445,12 @@ int main(int argc, char **argv) {
                  "measurement edit action should enable before removing selected layer")) {
         return EXIT_FAILURE;
     }
+    removeWindow.clearLayerSelection();
+    if (!require(removeWindow.currentLayerId().isEmpty(),
+                 "main window should clear selected layer id when selection is cleared")) {
+        return EXIT_FAILURE;
+    }
+    removeWindow.selectLayerRow(removableLayer->id());
 
     removeController.removeLayer(removableLayer->id());
     if (!require(removeLayerManager.layers().empty(), "layer manager should remove selected layer")) {

@@ -272,6 +272,10 @@ void MainWindow::selectLayerRow(const std::string &layerId) {
     layerDock_->selectLayer(layerId);
 }
 
+void MainWindow::clearLayerSelection() {
+    layerDock_->clearSelection();
+}
+
 QString MainWindow::currentLayerId() const {
     return layerDock_->currentLayerId();
 }

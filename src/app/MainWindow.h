@@ -31,6 +31,7 @@ public:
     void addLayerRow(const Layer &layer);
     void removeLayerRow(const std::string &layerId);
     void selectLayerRow(const std::string &layerId);
+    void clearLayerSelection();
     void showLayerDetails(const QString &text);
     void showPickDetails(const QStringList &summaryLines,
                          const QList<std::pair<QString, QString>> &attributes);

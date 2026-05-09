@@ -178,6 +178,12 @@ void LayerTreeDock::selectLayer(const std::string &id) {
     }
 }
 
+void LayerTreeDock::clearSelection() {
+    const QSignalBlocker blocker(tree_);
+    tree_->setCurrentItem(nullptr);
+    tree_->clearSelection();
+}
+
 void LayerTreeDock::ensurePlaceholderItem() {
     for (int i = 0; i < tree_->topLevelItemCount(); ++i) {
         if (!isPlaceholderItem(tree_->topLevelItem(i))) {
