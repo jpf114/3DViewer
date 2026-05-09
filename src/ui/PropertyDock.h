@@ -17,6 +17,7 @@ class QSlider;
 class QLabel;
 class QGroupBox;
 class QFormLayout;
+class QResizeEvent;
 class QTableWidget;
 class QTextEdit;
 class QWidget;
@@ -42,8 +43,12 @@ signals:
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
     void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     void setupUi();
+    void updateTextHeight();
     void clearForm(QFormLayout *form);
     void clearInspection();
     void onOpacitySliderChanged(int value);
@@ -59,6 +64,7 @@ private:
     QWidget *propertiesWidget_;
     QString currentLayerId_;
     int currentBandCount_ = 0;
+    bool updatingTextHeight_ = false;
 
     QGroupBox *basicGroup_;
     QFormLayout *basicForm_;

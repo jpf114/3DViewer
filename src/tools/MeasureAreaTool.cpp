@@ -73,6 +73,7 @@ void MeasureAreaTool::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event)
 
 void MeasureAreaTool::clear(GlobeWidget &widget) {
     points_.clear();
+    widget.sceneController().clearMeasurementDraft();
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(u"测面：未开始"_s);
 }
@@ -91,11 +92,18 @@ void MeasureAreaTool::commit(GlobeWidget &widget) {
     emit widget.measurementCommitted(data);
 
     points_.clear();
+    widget.sceneController().clearMeasurementDraft();
     emit widget.measurementTextChanged(u"测面：结果已保留，可继续开始下一条。"_s);
     emit widget.measurementStatusChanged(u"测面：已保存结果"_s);
 }
 
 void MeasureAreaTool::publishMeasurement(GlobeWidget &widget) const {
+    MeasurementLayerData draft;
+    draft.kind = MeasurementKind::Area;
+    draft.points = points_;
+    draft.lengthMeters = globe::polylineLengthMeters(points_);
+    draft.areaSquareMeters = globe::polygonAreaSquareMeters(points_);
+    widget.sceneController().setMeasurementDraft(draft);
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     if (points_.size() >= 3) {
         emit widget.measurementStatusChanged(

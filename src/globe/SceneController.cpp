@@ -7,11 +7,20 @@
 #endif
 
 #include <osg/Camera>
+#include <osg/Depth>
+#include <osg/Geometry>
+#include <osg/Geode>
 #include <osg/Group>
 #include <osg/GraphicsContext>
 #include <osg/Image>
+#include <osg/LineStipple>
+#include <osg/LineWidth>
 #include <osg/Material>
+#include <osg/Point>
 #include <osg/PositionAttitudeTransform>
+#include <osg/StateSet>
+#include <osg/Vec3d>
+#include <osg/Vec4>
 #include <osg/Viewport>
 #include <osgDB/ReadFile>
 #include <osgEarth/Color>
@@ -80,7 +89,9 @@ struct SceneController::Impl {
     osg::ref_ptr<osgEarth::Map> map;
     osg::ref_ptr<osgEarth::MapNode> mapNode;
     osg::ref_ptr<osg::Group> rootNode;
+    osg::ref_ptr<osg::Group> measurementDraftRoot;
     osg::ref_ptr<osg::Group> modelRoot;
+    osg::ref_ptr<osg::Node> measurementDraftNode;
     osg::ref_ptr<osgViewer::Viewer> viewer;
     osg::ref_ptr<osgViewer::GraphicsWindow> graphicsWindow;
     osg::ref_ptr<osgEarth::ImageLayer> baseLayer;
@@ -99,6 +110,128 @@ constexpr double kFlyToMinRange = 200.0;
 constexpr double kFlyToMaxRange = 4.0e7;
 constexpr double kMetersPerDegLat = 111320.0;
 constexpr double kDefaultModelRadiusMeters = 50.0;
+constexpr double kMeasurementDraftAltitudeMeters = 5.0;
+constexpr float kMeasurementDraftPointSize = 9.0f;
+constexpr float kMeasurementDraftLineWidth = 2.5f;
+const osg::Vec4 kMeasurementDraftLineColor(1.0f, 0.82f, 0.18f, 1.0f);
+const osg::Vec4 kMeasurementDraftPointColor(1.0f, 0.95f, 0.55f, 1.0f);
+
+bool measurementPointToWorld(osgEarth::MapNode *mapNode,
+                             const globe::MeasurementPoint &point,
+                             osg::Vec3d *world) {
+    if (mapNode == nullptr || world == nullptr) {
+        return false;
+    }
+
+    osgEarth::GeoPoint geoPoint(
+        osgEarth::SpatialReference::get("wgs84"),
+        point.longitude,
+        point.latitude,
+        kMeasurementDraftAltitudeMeters,
+        osgEarth::ALTMODE_RELATIVE);
+    return geoPoint.toWorld(*world);
+}
+
+osg::ref_ptr<osg::Vec3Array> measurementWorldVertices(osgEarth::MapNode *mapNode,
+                                                      const std::vector<globe::MeasurementPoint> &points) {
+    auto vertices = osg::ref_ptr<osg::Vec3Array>(new osg::Vec3Array());
+    for (const auto &point : points) {
+        osg::Vec3d world;
+        if (measurementPointToWorld(mapNode, point, &world)) {
+            vertices->push_back(world);
+        }
+    }
+    return vertices;
+}
+
+void applyMeasurementDraftState(osg::StateSet *stateSet, bool stippled = false) {
+    if (stateSet == nullptr) {
+        return;
+    }
+
+    stateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+    stateSet->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
+
+    auto depth = osg::ref_ptr<osg::Depth>(new osg::Depth());
+    depth->setWriteMask(false);
+    stateSet->setAttributeAndModes(depth.get(), osg::StateAttribute::ON);
+
+    if (stippled) {
+        auto stipple = osg::ref_ptr<osg::LineStipple>(new osg::LineStipple());
+        stipple->setFactor(2);
+        stipple->setPattern(0x00FF);
+        stateSet->setAttributeAndModes(stipple.get(), osg::StateAttribute::ON);
+    }
+}
+
+osg::ref_ptr<osg::Geometry> createMeasurementPointGeometry(osg::Vec3Array *vertices) {
+    if (vertices == nullptr || vertices->empty()) {
+        return nullptr;
+    }
+
+    auto geometry = osg::ref_ptr<osg::Geometry>(new osg::Geometry());
+    geometry->setVertexArray(vertices);
+    geometry->addPrimitiveSet(new osg::DrawArrays(GL_POINTS, 0, static_cast<GLsizei>(vertices->size())));
+
+    auto colors = osg::ref_ptr<osg::Vec4Array>(new osg::Vec4Array());
+    colors->push_back(kMeasurementDraftPointColor);
+    geometry->setColorArray(colors.get(), osg::Array::BIND_OVERALL);
+
+    osg::StateSet *stateSet = geometry->getOrCreateStateSet();
+    applyMeasurementDraftState(stateSet);
+    auto point = osg::ref_ptr<osg::Point>(new osg::Point());
+    point->setSize(kMeasurementDraftPointSize);
+    stateSet->setAttributeAndModes(point.get(), osg::StateAttribute::ON);
+    return geometry;
+}
+
+osg::ref_ptr<osg::Geometry> createMeasurementLineGeometry(osg::Vec3Array *vertices, bool closed) {
+    if (vertices == nullptr || vertices->size() < 2) {
+        return nullptr;
+    }
+
+    auto geometry = osg::ref_ptr<osg::Geometry>(new osg::Geometry());
+    geometry->setVertexArray(vertices);
+    geometry->addPrimitiveSet(new osg::DrawArrays(
+        closed ? GL_LINE_LOOP : GL_LINE_STRIP,
+        0,
+        static_cast<GLsizei>(vertices->size())));
+
+    auto colors = osg::ref_ptr<osg::Vec4Array>(new osg::Vec4Array());
+    colors->push_back(kMeasurementDraftLineColor);
+    geometry->setColorArray(colors.get(), osg::Array::BIND_OVERALL);
+
+    osg::StateSet *stateSet = geometry->getOrCreateStateSet();
+    applyMeasurementDraftState(stateSet, true);
+    auto lineWidth = osg::ref_ptr<osg::LineWidth>(new osg::LineWidth(kMeasurementDraftLineWidth));
+    stateSet->setAttributeAndModes(lineWidth.get(), osg::StateAttribute::ON);
+    return geometry;
+}
+
+osg::ref_ptr<osg::Node> createMeasurementDraftNode(osgEarth::MapNode *mapNode, const MeasurementLayerData &data) {
+    auto vertices = measurementWorldVertices(mapNode, data.points);
+    if (!vertices || vertices->empty()) {
+        return nullptr;
+    }
+
+    auto geode = osg::ref_ptr<osg::Geode>(new osg::Geode());
+    if (auto pointGeometry = createMeasurementPointGeometry(vertices.get())) {
+        geode->addDrawable(pointGeometry.get());
+    }
+
+    const bool closed = data.kind == MeasurementKind::Area && vertices->size() >= 3;
+    if (auto lineGeometry = createMeasurementLineGeometry(vertices.get(), closed)) {
+        geode->addDrawable(lineGeometry.get());
+    }
+
+    if (geode->getNumDrawables() == 0) {
+        return nullptr;
+    }
+
+    return geode;
+}
 
 std::string escapeXml(const std::string &input) {
     std::string output;
@@ -725,6 +858,18 @@ void SceneController::setSelectedLayer(const std::string &id) {
     refreshMeasurementSelection();
 }
 
+void SceneController::setMeasurementDraft(const MeasurementLayerData &data) {
+    clearMeasurementDraft();
+    if (!impl_->measurementDraftRoot || !impl_->mapNode) {
+        return;
+    }
+
+    impl_->measurementDraftNode = createMeasurementDraftNode(impl_->mapNode.get(), data);
+    if (impl_->measurementDraftNode) {
+        impl_->measurementDraftRoot->addChild(impl_->measurementDraftNode.get());
+    }
+}
+
 void SceneController::syncLayerState(const std::shared_ptr<Layer> &layer) {
     const auto modelIt = impl_->renderModelNodes.find(layer->id());
     if (modelIt != impl_->renderModelNodes.end()) {
@@ -850,8 +995,10 @@ void SceneController::initializeDefaultScene(int width, int height) {
 
     impl_->mapNode = new osgEarth::MapNode(impl_->map.get());
     impl_->rootNode = new osg::Group();
+    impl_->measurementDraftRoot = new osg::Group();
     impl_->modelRoot = new osg::Group();
     impl_->rootNode->addChild(impl_->mapNode.get());
+    impl_->rootNode->addChild(impl_->measurementDraftRoot.get());
     impl_->rootNode->addChild(impl_->modelRoot.get());
     impl_->viewer = new osgViewer::Viewer();
     impl_->viewer->setRealizeOperation(new osgEarth::GL3RealizeOperation());
@@ -971,6 +1118,16 @@ void SceneController::resetView() {
     constexpr double kDefaultRange = 3.0 * 6371000.0;
     osgEarth::Viewpoint vp("home", 0.0, 0.0, 0.0, 0.0, -90.0, kDefaultRange);
     em->setViewpoint(vp, 1.5);
+}
+
+void SceneController::clearMeasurementDraft() {
+    if (!impl_->measurementDraftRoot || !impl_->measurementDraftNode) {
+        impl_->measurementDraftNode = nullptr;
+        return;
+    }
+
+    impl_->measurementDraftRoot->removeChild(impl_->measurementDraftNode.get());
+    impl_->measurementDraftNode = nullptr;
 }
 
 QImage SceneController::captureImage() {

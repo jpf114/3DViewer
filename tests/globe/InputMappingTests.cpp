@@ -20,6 +20,14 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    if (globe::shouldScheduleHoverPick(Qt::NoButton, ToolId::Measure)) {
+        return EXIT_FAILURE;
+    }
+
+    if (globe::shouldScheduleHoverPick(Qt::NoButton, ToolId::MeasureArea)) {
+        return EXIT_FAILURE;
+    }
+
     if (globe::shouldScheduleHoverPick(Qt::NoButton, ToolId::Pan)) {
         return EXIT_FAILURE;
     }

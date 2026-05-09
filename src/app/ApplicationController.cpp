@@ -244,6 +244,7 @@ ApplicationController::ApplicationController(MainWindow &window,
     });
 
     QObject::connect(&window_, &MainWindow::toolChanged, [this](int toolId) {
+        window_.globeWidget()->sceneController().clearMeasurementDraft();
         window_.globeWidget()->toolManager().setActiveTool(static_cast<ToolId>(toolId));
     });
 

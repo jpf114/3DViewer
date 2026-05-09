@@ -26,7 +26,7 @@ inline bool shouldScheduleHoverPick(Qt::MouseButtons buttons, ToolId activeToolI
         return false;
     }
 
-    return activeToolId != ToolId::Pan;
+    return activeToolId == ToolId::Pick;
 }
 
 } // namespace globe

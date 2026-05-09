@@ -1,7 +1,9 @@
 #include "ui/PropertyDock.h"
 
 #include <algorithm>
+#include <cmath>
 #include <QAbstractItemView>
+#include <QAbstractTextDocumentLayout>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -10,11 +12,15 @@
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QSizePolicy>
 #include <QSlider>
 #include <QStringLiteral>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QTextDocument>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -118,8 +124,14 @@ void PropertyDock::setupUi() {
 
     text_ = new QTextEdit(propertiesWidget_);
     text_->setReadOnly(true);
-    text_->setMaximumHeight(64);
+    text_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    text_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    text_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     layout->addWidget(text_);
+    connect(text_->document()->documentLayout(),
+            &QAbstractTextDocumentLayout::documentSizeChanged,
+            this,
+            [this]() { updateTextHeight(); });
 
     pickGroup_ = new QGroupBox(u"拾取结果"_s, propertiesWidget_);
     pickForm_ = new QFormLayout(pickGroup_);
@@ -249,16 +261,19 @@ void PropertyDock::setupUi() {
     connect(modelHeightSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
     connect(modelScaleSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
     connect(modelHeadingSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PropertyDock::onModelPlacementChanged);
+    updateTextHeight();
 }
 
 void PropertyDock::showText(const QString &text) {
     text_->setPlainText(text);
+    updateTextHeight();
     clearInspection();
 }
 
 void PropertyDock::showPickDetails(const QStringList &summaryLines,
                                    const QList<std::pair<QString, QString>> &attributes) {
     text_->setPlainText(u"当前显示拾取结果。"_s);
+    updateTextHeight();
     clearInspection();
 
     for (const QString &line : summaryLines) {
@@ -305,6 +320,7 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
                                        const std::optional<MeasurementLayerData> &measurementData) {
     currentLayerId_ = layerId;
     text_->setPlainText(u"当前显示选中图层属性。"_s);
+    updateTextHeight();
 
     clearForm(basicForm_);
     basicForm_->addRow(u"名称:"_s, makeValueLabel(name, basicGroup_, true));
@@ -454,6 +470,7 @@ void PropertyDock::clearLayerProperties() {
     currentLayerId_.clear();
     currentBandCount_ = 0;
     text_->setPlainText(u"未选择图层。"_s);
+    updateTextHeight();
     opacitySlider_->blockSignals(true);
     opacitySlider_->setValue(100);
     opacitySlider_->blockSignals(false);
@@ -483,6 +500,29 @@ void PropertyDock::clearLayerProperties() {
     bandTable_->setVisible(false);
     vectorGroup_->setVisible(false);
     fieldTable_->setVisible(false);
+}
+
+void PropertyDock::resizeEvent(QResizeEvent *event) {
+    QDockWidget::resizeEvent(event);
+    updateTextHeight();
+}
+
+void PropertyDock::updateTextHeight() {
+    if (text_ == nullptr || updatingTextHeight_) {
+        return;
+    }
+
+    updatingTextHeight_ = true;
+    const int viewportWidth = (std::max)(text_->viewport()->width(), 1);
+    text_->document()->setTextWidth(viewportWidth);
+    text_->document()->adjustSize();
+
+    const int frame = text_->frameWidth() * 2;
+    const int margin = static_cast<int>(std::ceil(text_->document()->documentMargin() * 2.0));
+    const int documentHeight = static_cast<int>(std::ceil(text_->document()->size().height()));
+    const int targetHeight = (std::max)(40, documentHeight + frame + margin);
+    text_->setFixedHeight(targetHeight);
+    updatingTextHeight_ = false;
 }
 
 void PropertyDock::clearForm(QFormLayout *form) {

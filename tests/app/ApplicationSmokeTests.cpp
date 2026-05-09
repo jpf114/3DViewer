@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QString>
+#include <QTextEdit>
 
 #include "app/MainWindow.h"
 #include "data/DataSourceDescriptor.h"
@@ -15,6 +16,16 @@ int main(int argc, char **argv) {
     static_assert(std::is_base_of_v<QMainWindow, MainWindow>);
 
     PropertyDock dock;
+    auto *textEdit = dock.findChild<QTextEdit *>();
+    if (!textEdit || textEdit->maximumHeight() == 64) {
+        return EXIT_FAILURE;
+    }
+
+    if (textEdit->verticalScrollBarPolicy() != Qt::ScrollBarAlwaysOff ||
+        textEdit->horizontalScrollBarPolicy() != Qt::ScrollBarAlwaysOff) {
+        return EXIT_FAILURE;
+    }
+
     ModelPlacement placement;
     placement.longitude = 120.123456;
     placement.latitude = 30.654321;

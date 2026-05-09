@@ -66,6 +66,7 @@ void MeasureTool::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
 
 void MeasureTool::clear(GlobeWidget &widget) {
     points_.clear();
+    widget.sceneController().clearMeasurementDraft();
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(u"测距：未开始"_s);
 }
@@ -83,11 +84,17 @@ void MeasureTool::commit(GlobeWidget &widget) {
     emit widget.measurementCommitted(data);
 
     points_.clear();
+    widget.sceneController().clearMeasurementDraft();
     emit widget.measurementTextChanged(u"测距：结果已保留，可继续开始下一条。"_s);
     emit widget.measurementStatusChanged(u"测距：已保存结果"_s);
 }
 
 void MeasureTool::publishMeasurement(GlobeWidget &widget) const {
+    MeasurementLayerData draft;
+    draft.kind = MeasurementKind::Distance;
+    draft.points = points_;
+    draft.lengthMeters = globe::polylineLengthMeters(points_);
+    widget.sceneController().setMeasurementDraft(draft);
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(
         QString(u"测距总长：%1"_s).arg(formatDistance(globe::polylineLengthMeters(points_))));

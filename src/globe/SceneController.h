@@ -8,6 +8,7 @@
 
 #include <QImage>
 
+#include "layers/MeasurementLayerData.h"
 #include "layers/GeographicBounds.h"
 #include "layers/Layer.h"
 
@@ -41,12 +42,14 @@ public:
     std::size_t renderedLayerCount() const;
     void resize(int width, int height);
     void setSelectedLayer(const std::string &id);
+    void setMeasurementDraft(const MeasurementLayerData &data);
     void syncLayerState(const std::shared_ptr<Layer> &layer);
     void updateImageLayerBands(const std::shared_ptr<Layer> &layer);
     void initializeDefaultScene(int width, int height);
     void flyToGeographicBounds(const GeographicBounds &bounds, double durationSeconds = 1.5);
     void reorderUserLayers(const std::vector<std::shared_ptr<Layer>> &userLayersInOrder);
     void resetView();
+    void clearMeasurementDraft();
     QImage captureImage();
     void setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir);
 
