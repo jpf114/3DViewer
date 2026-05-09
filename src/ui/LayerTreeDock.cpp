@@ -4,14 +4,11 @@
 #include <QAbstractItemView>
 #include <QMenu>
 #include <QSignalBlocker>
-#include <QStringLiteral>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
 #include "layers/LayerTypes.h"
 #include "ui/IconManager.h"
-
-using namespace Qt::Literals::StringLiterals;
 
 namespace {
 

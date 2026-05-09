@@ -406,7 +406,7 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
                                      makeValueLabel(formatArea(measurementData->areaSquareMeters), measurementGroup_));
         }
         measurementForm_->addRow(QString::fromUtf8(u8"操作:"),
-                                 makeValueLabel(QString::fromUtf8(u8"可在工具栏点击“编辑量测”继续修改"), measurementGroup_, true));
+                                 makeValueLabel(QString::fromUtf8(u8"可在工具栏点击“编辑量测”继续修改。"), measurementGroup_, true));
         measurementGroup_->setVisible(true);
     } else {
         measurementGroup_->setVisible(false);
