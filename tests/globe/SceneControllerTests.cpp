@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <cmath>
 #include <osgDB/Registry>
 
 #include "globe/SceneController.h"
@@ -69,6 +70,13 @@ int main() {
     }
 
     const auto modelLayer = std::make_shared<ModelLayer>("model-1", "Model 1", modelPath.lexically_normal().string());
+    ModelPlacement initialPlacement;
+    initialPlacement.longitude = 120.25;
+    initialPlacement.latitude = 30.5;
+    initialPlacement.height = 150.0;
+    initialPlacement.scale = 2.0;
+    initialPlacement.heading = 30.0;
+    modelLayer->setModelPlacement(initialPlacement);
     controller.addLayer(imageryLayer);
     controller.addLayer(elevationLayer);
     controller.addLayer(vectorLayer);
@@ -83,6 +91,14 @@ int main() {
     if (objSupported) {
         if (!modelLayer->geographicBounds().has_value() || !modelLayer->geographicBounds()->isValid()) {
             std::cerr << "Expected real OBJ model layer to produce valid geographic bounds.\n";
+            return EXIT_FAILURE;
+        }
+        const auto initialBounds = *modelLayer->geographicBounds();
+        const double initialCenterLon = (initialBounds.west + initialBounds.east) * 0.5;
+        const double initialCenterLat = (initialBounds.south + initialBounds.north) * 0.5;
+        if (std::abs(initialCenterLon - initialPlacement.longitude) > 0.01 ||
+            std::abs(initialCenterLat - initialPlacement.latitude) > 0.01) {
+            std::cerr << "Expected model bounds center to follow initial placement.\n";
             return EXIT_FAILURE;
         }
 
@@ -100,6 +116,14 @@ int main() {
             std::cerr << "Expected real STL model layer to be visible in scene.\n";
             return EXIT_FAILURE;
         }
+        const auto initialBounds = *modelLayer->geographicBounds();
+        const double initialCenterLon = (initialBounds.west + initialBounds.east) * 0.5;
+        const double initialCenterLat = (initialBounds.south + initialBounds.north) * 0.5;
+        if (std::abs(initialCenterLon - initialPlacement.longitude) > 0.01 ||
+            std::abs(initialCenterLat - initialPlacement.latitude) > 0.01) {
+            std::cerr << "Expected model bounds center to follow initial placement.\n";
+            return EXIT_FAILURE;
+        }
     } else if (controller.isLayerVisibleInScene("model-1")) {
         std::cerr << "Expected unsupported model layer to stay out of scene.\n";
         return EXIT_FAILURE;
@@ -113,6 +137,27 @@ int main() {
     }
 
     if (objSupported || stlSupported) {
+        ModelPlacement updatedPlacement = initialPlacement;
+        updatedPlacement.longitude = 121.75;
+        updatedPlacement.latitude = 31.25;
+        updatedPlacement.scale = 3.5;
+        modelLayer->setModelPlacement(updatedPlacement);
+        controller.syncLayerState(modelLayer);
+
+        if (!modelLayer->geographicBounds().has_value() || !modelLayer->geographicBounds()->isValid()) {
+            std::cerr << "Expected model placement sync to keep valid bounds.\n";
+            return EXIT_FAILURE;
+        }
+
+        const auto updatedBounds = *modelLayer->geographicBounds();
+        const double updatedCenterLon = (updatedBounds.west + updatedBounds.east) * 0.5;
+        const double updatedCenterLat = (updatedBounds.south + updatedBounds.north) * 0.5;
+        if (std::abs(updatedCenterLon - updatedPlacement.longitude) > 0.01 ||
+            std::abs(updatedCenterLat - updatedPlacement.latitude) > 0.01) {
+            std::cerr << "Expected model bounds center to follow updated placement.\n";
+            return EXIT_FAILURE;
+        }
+
         modelLayer->setVisible(false);
         controller.syncLayerState(modelLayer);
         if (controller.isLayerVisibleInScene("model-1")) {
