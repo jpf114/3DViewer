@@ -248,6 +248,10 @@ ApplicationController::ApplicationController(MainWindow &window,
         window_.globeWidget()->toolManager().setActiveTool(static_cast<ToolId>(toolId));
     });
 
+    QObject::connect(&window_, &MainWindow::undoMeasurementRequested, [this]() {
+        window_.globeWidget()->toolManager().undoActiveToolState(*window_.globeWidget());
+    });
+
     QObject::connect(&window_, &MainWindow::resetViewRequested, [this]() {
         resetView();
     });

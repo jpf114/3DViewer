@@ -50,3 +50,7 @@ void ToolManager::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
 void ToolManager::clearActiveToolState(GlobeWidget &widget) {
     currentTool_->clear(widget);
 }
+
+void ToolManager::undoActiveToolState(GlobeWidget &widget) {
+    currentTool_->undo(widget);
+}

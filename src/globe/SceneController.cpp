@@ -22,6 +22,7 @@
 #include <osg/Vec3d>
 #include <osg/Vec4>
 #include <osg/Viewport>
+#include <osgText/Text>
 #include <osgDB/ReadFile>
 #include <osgEarth/Color>
 #include <osgEarth/EarthManipulator>
@@ -53,6 +54,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <numbers>
+#include <QStringLiteral>
 #include <spdlog/spdlog.h>
 
 #include <osgGA/EventQueue>
@@ -76,6 +78,8 @@
 #include "data/BasemapUrlTemplate.h"
 #include "data/MapConfig.h"
 #include "data/VectorFeatureQuery.h"
+
+using namespace Qt::Literals::StringLiterals;
 
 struct SceneController::Impl {
     bool initialized = false;
@@ -113,8 +117,38 @@ constexpr double kDefaultModelRadiusMeters = 50.0;
 constexpr double kMeasurementDraftAltitudeMeters = 5.0;
 constexpr float kMeasurementDraftPointSize = 9.0f;
 constexpr float kMeasurementDraftLineWidth = 2.5f;
+constexpr float kMeasurementDraftTextSize = 18.0f;
 const osg::Vec4 kMeasurementDraftLineColor(1.0f, 0.82f, 0.18f, 1.0f);
 const osg::Vec4 kMeasurementDraftPointColor(1.0f, 0.95f, 0.55f, 1.0f);
+const osg::Vec4 kMeasurementDraftFillColor(1.0f, 0.82f, 0.18f, 0.2f);
+const osg::Vec4 kMeasurementDraftTextColor(1.0f, 0.98f, 0.82f, 1.0f);
+
+QString formatMeasurementDistance(double meters) {
+    if (meters >= 1000.0) {
+        return QString(u"%1 km"_s).arg(meters / 1000.0, 0, 'f', 3);
+    }
+    return QString(u"%1 m"_s).arg(meters, 0, 'f', 1);
+}
+
+QString formatMeasurementArea(double squareMeters) {
+    if (squareMeters >= 1000000.0) {
+        return QString(u"%1 km²"_s).arg(squareMeters / 1000000.0, 0, 'f', 3);
+    }
+    return QString(u"%1 m²"_s).arg(squareMeters, 0, 'f', 1);
+}
+
+QString measurementDraftLabelText(const MeasurementLayerData &data) {
+    if (data.kind == MeasurementKind::Area) {
+        if (data.points.size() >= 3) {
+            return QString(u"面积 %1\n周长 %2"_s)
+                .arg(formatMeasurementArea(data.areaSquareMeters))
+                .arg(formatMeasurementDistance(data.lengthMeters));
+        }
+        return QString(u"周长 %1"_s).arg(formatMeasurementDistance(data.lengthMeters));
+    }
+
+    return QString(u"总长 %1"_s).arg(formatMeasurementDistance(data.lengthMeters));
+}
 
 bool measurementPointToWorld(osgEarth::MapNode *mapNode,
                              const globe::MeasurementPoint &point,
@@ -210,6 +244,41 @@ osg::ref_ptr<osg::Geometry> createMeasurementLineGeometry(osg::Vec3Array *vertic
     return geometry;
 }
 
+osg::ref_ptr<osg::Geometry> createMeasurementFillGeometry(osg::Vec3Array *vertices) {
+    if (vertices == nullptr || vertices->size() < 3) {
+        return nullptr;
+    }
+
+    auto geometry = osg::ref_ptr<osg::Geometry>(new osg::Geometry());
+    geometry->setVertexArray(vertices);
+    geometry->addPrimitiveSet(new osg::DrawArrays(GL_POLYGON, 0, static_cast<GLsizei>(vertices->size())));
+
+    auto colors = osg::ref_ptr<osg::Vec4Array>(new osg::Vec4Array());
+    colors->push_back(kMeasurementDraftFillColor);
+    geometry->setColorArray(colors.get(), osg::Array::BIND_OVERALL);
+
+    osg::StateSet *stateSet = geometry->getOrCreateStateSet();
+    applyMeasurementDraftState(stateSet);
+    return geometry;
+}
+
+osg::ref_ptr<osgText::Text> createMeasurementLabel(const MeasurementLayerData &data, osg::Vec3Array *vertices) {
+    if (vertices == nullptr || vertices->empty()) {
+        return nullptr;
+    }
+
+    auto text = osg::ref_ptr<osgText::Text>(new osgText::Text());
+    text->setCharacterSize(kMeasurementDraftTextSize);
+    text->setAxisAlignment(osgText::TextBase::SCREEN);
+    text->setAlignment(osgText::TextBase::LEFT_BOTTOM);
+    text->setColor(kMeasurementDraftTextColor);
+    text->setBackdropType(osgText::Text::OUTLINE);
+    text->setBackdropColor(osg::Vec4(0.08f, 0.1f, 0.14f, 0.9f));
+    text->setPosition(vertices->back() + osg::Vec3(10.0f, 10.0f, 0.0f));
+    text->setText(measurementDraftLabelText(data).toStdString());
+    return text;
+}
+
 osg::ref_ptr<osg::Node> createMeasurementDraftNode(osgEarth::MapNode *mapNode, const MeasurementLayerData &data) {
     auto vertices = measurementWorldVertices(mapNode, data.points);
     if (!vertices || vertices->empty()) {
@@ -217,6 +286,12 @@ osg::ref_ptr<osg::Node> createMeasurementDraftNode(osgEarth::MapNode *mapNode, c
     }
 
     auto geode = osg::ref_ptr<osg::Geode>(new osg::Geode());
+    if (data.kind == MeasurementKind::Area && vertices->size() >= 3) {
+        if (auto fillGeometry = createMeasurementFillGeometry(vertices.get())) {
+            geode->addDrawable(fillGeometry.get());
+        }
+    }
+
     if (auto pointGeometry = createMeasurementPointGeometry(vertices.get())) {
         geode->addDrawable(pointGeometry.get());
     }
@@ -224,6 +299,10 @@ osg::ref_ptr<osg::Node> createMeasurementDraftNode(osgEarth::MapNode *mapNode, c
     const bool closed = data.kind == MeasurementKind::Area && vertices->size() >= 3;
     if (auto lineGeometry = createMeasurementLineGeometry(vertices.get(), closed)) {
         geode->addDrawable(lineGeometry.get());
+    }
+
+    if (auto label = createMeasurementLabel(data, vertices.get())) {
+        geode->addDrawable(label.get());
     }
 
     if (geode->getNumDrawables() == 0) {

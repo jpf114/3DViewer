@@ -53,6 +53,7 @@ signals:
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
     void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
     void toolChanged(int toolId);
+    void undoMeasurementRequested();
     void resetViewRequested();
     void zoomToLayerRequested(const QString &layerId);
     void screenshotRequested();
@@ -76,6 +77,7 @@ private:
     QAction *measureAction_;
     QAction *measureAreaAction_;
     QAction *clearMeasureAction_;
+    QAction *undoMeasureAction_;
     QAction *homeAction_;
     QAction *screenshotAction_;
     QActionGroup *toolGroup_;

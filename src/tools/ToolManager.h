@@ -26,6 +26,7 @@ public:
     void mousePressEvent(GlobeWidget &widget, QMouseEvent *event);
     void mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event);
     void clearActiveToolState(GlobeWidget &widget);
+    void undoActiveToolState(GlobeWidget &widget);
 
 private:
     QObject *parent_;

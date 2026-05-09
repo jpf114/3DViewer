@@ -52,12 +52,12 @@ bool splitKeyValue(const QString &line, QString *key, QString *value) {
 }
 
 void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(u"测距：左键添加点，右键或工具栏清空。"_s);
+    propertyDock->showText(u"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"_s);
     statusController->setMeasurementText(u"测距：未开始"_s);
 }
 
 void showMeasureAreaHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(u"测面：左键添加点，右键或工具栏清空。"_s);
+    propertyDock->showText(u"测面：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"_s);
     statusController->setMeasurementText(u"测面：未开始"_s);
 }
 
@@ -128,6 +128,9 @@ MainWindow::MainWindow(QWidget *parent)
     measureAreaAction_->setActionGroup(toolGroup_);
     measureAreaAction_->setToolTip(u"测面工具 (4)"_s);
 
+    undoMeasureAction_ = toolBar->addAction(icons.icon("arrow-bend-up-right-regular.svg", 20, toolColor), u"撤销量测点"_s);
+    undoMeasureAction_->setToolTip(u"撤销当前量测的最后一个点 (Backspace)"_s);
+
     clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空量测"_s);
     clearMeasureAction_->setToolTip(u"清空当前量测结果 (Esc)"_s);
 
@@ -168,6 +171,7 @@ MainWindow::MainWindow(QWidget *parent)
         propertyDock_->showText(text);
     });
     connect(globeWidget_, &GlobeWidget::measurementStatusChanged, statusController_, &StatusBarController::setMeasurementText);
+    connect(undoMeasureAction_, &QAction::triggered, this, &MainWindow::undoMeasurementRequested);
     connect(clearMeasureAction_, &QAction::triggered, this, [this]() {
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
     });
@@ -308,6 +312,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     }
     if (event->key() == Qt::Key_Escape && !event->modifiers()) {
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
+        return;
+    }
+    if (event->key() == Qt::Key_Backspace && !event->modifiers()) {
+        emit undoMeasurementRequested();
         return;
     }
     if (event->key() == Qt::Key_Delete && !event->modifiers()) {

@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QDoubleSpinBox>
+#include <QKeyEvent>
 #include <QString>
 #include <QTextEdit>
 
@@ -14,6 +15,17 @@
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     static_assert(std::is_base_of_v<QMainWindow, MainWindow>);
+
+    MainWindow window;
+    bool undoRequested = false;
+    QObject::connect(&window, &MainWindow::undoMeasurementRequested, [&undoRequested]() {
+        undoRequested = true;
+    });
+    QKeyEvent backspaceEvent(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+    QApplication::sendEvent(&window, &backspaceEvent);
+    if (!undoRequested) {
+        return EXIT_FAILURE;
+    }
 
     PropertyDock dock;
     auto *textEdit = dock.findChild<QTextEdit *>();

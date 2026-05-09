@@ -21,7 +21,7 @@ QString formatDistance(double meters) {
 
 QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points) {
     if (points.empty()) {
-        return u"测距：未开始。\n操作：左键添加点，右键结束并保留，Esc 或工具栏清空草稿。"_s;
+        return u"测距：未开始。\n操作：左键添加点，右键结束并保留，Backspace 撤销最后一点，Esc 或工具栏清空草稿。"_s;
     }
 
     QStringList lines;
@@ -37,7 +37,7 @@ QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points)
         lines.append(QString(u"最近一段：%1"_s).arg(formatDistance(segment)));
     }
 
-    lines.append(u"操作：左键继续，右键结束并保留，Esc 或工具栏清空草稿。"_s);
+    lines.append(u"操作：左键继续，右键结束并保留，Backspace 撤销最后一点，Esc 或工具栏清空草稿。"_s);
     return lines.join('\n');
 }
 
@@ -69,6 +69,21 @@ void MeasureTool::clear(GlobeWidget &widget) {
     widget.sceneController().clearMeasurementDraft();
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(u"测距：未开始"_s);
+}
+
+void MeasureTool::undo(GlobeWidget &widget) {
+    if (points_.empty()) {
+        clear(widget);
+        return;
+    }
+
+    points_.pop_back();
+    if (points_.empty()) {
+        clear(widget);
+        return;
+    }
+
+    publishMeasurement(widget);
 }
 
 void MeasureTool::commit(GlobeWidget &widget) {
