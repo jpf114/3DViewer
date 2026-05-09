@@ -303,6 +303,10 @@ void ApplicationController::importFile(const std::string &path) {
         pathsToImport.push_back(path);
     }
 
+    const bool batchImport = pathsToImport.size() > 1;
+    int importedCount = 0;
+    int skippedCount = 0;
+
     for (const auto &importPath : pathsToImport) {
         spdlog::info("ApplicationController: importing '{}'", importPath);
         window_.statusBar()->showMessage(
@@ -311,6 +315,13 @@ void ApplicationController::importFile(const std::string &path) {
         const auto layer = importer_.import(importPath);
         if (!layer) {
             spdlog::warn("ApplicationController: import failed for '{}'", importPath);
+            ++skippedCount;
+            if (batchImport) {
+                window_.statusBar()->showMessage(
+                    QString::fromUtf8(u8"已跳过无法导入的文件：%1").arg(utf8(importPath)),
+                    3000);
+                continue;
+            }
             window_.statusBar()->showMessage(QString::fromUtf8(u8"导入失败。"), 3000);
             QMessageBox::warning(
                 &window_,
@@ -322,10 +333,17 @@ void ApplicationController::importFile(const std::string &path) {
 
         if (!layerManager_.addLayer(layer)) {
             spdlog::warn("ApplicationController: duplicate layer for '{}'", importPath);
+            ++skippedCount;
+            if (batchImport) {
+                window_.statusBar()->showMessage(
+                    QString::fromUtf8(u8"已跳过重复图层：%1").arg(utf8(importPath)),
+                    3000);
+                continue;
+            }
             window_.statusBar()->showMessage(QString::fromUtf8(u8"图层已存在。"), 3000);
             QMessageBox::information(
                 &window_,
-                QString::fromUtf8(u8"已导入"),
+                QString::fromUtf8(u8"图层已存在"),
                 QString::fromUtf8(u8"该文件已经导入：\n%1").arg(utf8(importPath)));
             return;
         }
@@ -334,6 +352,7 @@ void ApplicationController::importFile(const std::string &path) {
         window_.addLayerRow(*layer);
         addToRecentFiles(utf8(importPath));
         spdlog::info("ApplicationController: layer '{}' imported successfully", layer->id());
+        ++importedCount;
 
         window_.statusBar()->showMessage(
             QString::fromUtf8(u8"已导入：%1 (%2)").arg(utf8(layer->name())).arg(layerKindToText(layer->kind())),
@@ -341,6 +360,22 @@ void ApplicationController::importFile(const std::string &path) {
 
         if (const auto bounds = layer->geographicBounds(); bounds.has_value() && bounds->isValid()) {
             sceneController_.flyToGeographicBounds(*bounds);
+        }
+    }
+
+    if (batchImport) {
+        if (importedCount > 0 && skippedCount > 0) {
+            window_.statusBar()->showMessage(
+                QString::fromUtf8(u8"批量导入完成：成功 %1，跳过 %2。").arg(importedCount).arg(skippedCount),
+                5000);
+        } else if (importedCount > 0) {
+            window_.statusBar()->showMessage(
+                QString::fromUtf8(u8"批量导入完成：成功导入 %1 个图层。").arg(importedCount),
+                5000);
+        } else if (skippedCount > 0) {
+            window_.statusBar()->showMessage(
+                QString::fromUtf8(u8"批量导入完成：未导入新图层，已跳过 %1 个文件。").arg(skippedCount),
+                5000);
         }
     }
 }

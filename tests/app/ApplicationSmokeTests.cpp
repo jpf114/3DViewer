@@ -451,5 +451,45 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    QTemporaryDir batchImportDir;
+    if (!require(batchImportDir.isValid(), "batch import temp directory should be created")) {
+        return EXIT_FAILURE;
+    }
+    QFile duplicateFile(batchImportDir.filePath("a_roads.geojson"));
+    if (!require(duplicateFile.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                 "duplicate import fixture should open for writing")) {
+        return EXIT_FAILURE;
+    }
+    duplicateFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Road A"},"geometry":{"type":"Point","coordinates":[120.1,30.2]}}]})");
+    duplicateFile.close();
+
+    QFile freshFile(batchImportDir.filePath("b_rivers.geojson"));
+    if (!require(freshFile.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                 "fresh import fixture should open for writing")) {
+        return EXIT_FAILURE;
+    }
+    freshFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"River B"},"geometry":{"type":"Point","coordinates":[121.1,31.2]}}]})");
+    freshFile.close();
+
+    MainWindow batchWindow;
+    LayerManager batchLayerManager;
+    DataImporter batchImporter;
+    ApplicationController batchController(
+        batchWindow,
+        batchWindow.globeWidget()->sceneController(),
+        batchLayerManager,
+        batchImporter);
+    const auto seededLayer = batchImporter.import(duplicateFile.fileName().toStdString());
+    if (!require(seededLayer != nullptr && batchLayerManager.addLayer(seededLayer),
+                 "seeded duplicate layer should be added before batch import")) {
+        return EXIT_FAILURE;
+    }
+    batchWindow.addLayerRow(*seededLayer);
+    batchController.importFile(batchImportDir.path().toStdString());
+    if (!require(batchLayerManager.layers().size() == 2,
+                 "batch import should continue past duplicate entries and import remaining files")) {
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
