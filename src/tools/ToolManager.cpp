@@ -47,6 +47,22 @@ void ToolManager::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
     currentTool_->mouseReleaseEvent(widget, event);
 }
 
+void ToolManager::startMeasurementEditing(GlobeWidget &widget, const MeasurementLayerData &data) {
+    const ToolId targetTool = data.kind == MeasurementKind::Area ? ToolId::MeasureArea : ToolId::Measure;
+    setActiveTool(targetTool);
+
+    if (targetTool == ToolId::Measure) {
+        if (auto *tool = dynamic_cast<MeasureTool *>(currentTool_.get())) {
+            tool->beginEditing(widget, data);
+        }
+        return;
+    }
+
+    if (auto *tool = dynamic_cast<MeasureAreaTool *>(currentTool_.get())) {
+        tool->beginEditing(widget, data);
+    }
+}
+
 void ToolManager::clearActiveToolState(GlobeWidget &widget) {
     currentTool_->clear(widget);
 }

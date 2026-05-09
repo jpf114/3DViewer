@@ -128,7 +128,12 @@ MainWindow::MainWindow(QWidget *parent)
     measureAreaAction_->setActionGroup(toolGroup_);
     measureAreaAction_->setToolTip(u"测面工具 (4)"_s);
 
+    editMeasureAction_ = toolBar->addAction(icons.icon("ruler-regular.svg", 20, toolColor), u"编辑量测"_s);
+    editMeasureAction_->setObjectName("editMeasureAction");
+    editMeasureAction_->setToolTip(u"继续编辑当前选中的量测结果"_s);
+
     undoMeasureAction_ = toolBar->addAction(icons.icon("arrow-bend-up-right-regular.svg", 20, toolColor), u"撤销量测点"_s);
+    undoMeasureAction_->setObjectName("undoMeasureAction");
     undoMeasureAction_->setToolTip(u"撤销当前量测的最后一个点 (Backspace)"_s);
 
     clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空量测"_s);
@@ -171,6 +176,7 @@ MainWindow::MainWindow(QWidget *parent)
         propertyDock_->showText(text);
     });
     connect(globeWidget_, &GlobeWidget::measurementStatusChanged, statusController_, &StatusBarController::setMeasurementText);
+    connect(editMeasureAction_, &QAction::triggered, this, &MainWindow::editSelectedMeasurementRequested);
     connect(undoMeasureAction_, &QAction::triggered, this, &MainWindow::undoMeasurementRequested);
     connect(clearMeasureAction_, &QAction::triggered, this, [this]() {
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
@@ -192,6 +198,29 @@ void MainWindow::removeLayerRow(const std::string &layerId) {
 
 void MainWindow::selectLayerRow(const std::string &layerId) {
     layerDock_->selectLayer(layerId);
+}
+
+QString MainWindow::currentLayerId() const {
+    return layerDock_->currentLayerId();
+}
+
+void MainWindow::setActiveToolAction(int toolId) {
+    const ToolId resolved = static_cast<ToolId>(toolId);
+    switch (resolved) {
+    case ToolId::Pick:
+        pickAction_->setChecked(true);
+        break;
+    case ToolId::Measure:
+        measureAction_->setChecked(true);
+        break;
+    case ToolId::MeasureArea:
+        measureAreaAction_->setChecked(true);
+        break;
+    case ToolId::Pan:
+    default:
+        panAction_->setChecked(true);
+        break;
+    }
 }
 
 void MainWindow::showLayerDetails(const QString &text) {

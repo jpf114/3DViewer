@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <QStringList>
 #include <string>
 
@@ -8,6 +9,7 @@
 
 struct ModelPlacement;
 class DataImporter;
+class Layer;
 class LayerManager;
 class MainWindow;
 class SceneController;
@@ -34,9 +36,11 @@ public:
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
+    bool updateMeasurementLayer(const std::shared_ptr<Layer> &layer, const MeasurementLayerData &data);
     void handleTerrainPick(const PickResult &pick);
     void addToRecentFiles(const QString &path);
     void addMeasurementLayer(const MeasurementLayerData &data);
+    void editSelectedMeasurement();
 
     MainWindow &window_;
     SceneController &sceneController_;

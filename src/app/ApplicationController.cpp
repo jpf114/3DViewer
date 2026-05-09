@@ -252,6 +252,10 @@ ApplicationController::ApplicationController(MainWindow &window,
         window_.globeWidget()->toolManager().undoActiveToolState(*window_.globeWidget());
     });
 
+    QObject::connect(&window_, &MainWindow::editSelectedMeasurementRequested, [this]() {
+        editSelectedMeasurement();
+    });
+
     QObject::connect(&window_, &MainWindow::resetViewRequested, [this]() {
         resetView();
     });
@@ -445,17 +449,56 @@ void ApplicationController::setModelPlacement(const std::string &layerId, const 
     showLayerDetails(layerId);
 }
 
+bool ApplicationController::updateMeasurementLayer(const std::shared_ptr<Layer> &layer, const MeasurementLayerData &data) {
+    if (!layer || layer->kind() != LayerKind::Measurement) {
+        return false;
+    }
+
+    if (!writeMeasurementGeoJson(utf8(layer->sourceUri()), data)) {
+        return false;
+    }
+
+    MeasurementLayerData storedData = data;
+    storedData.targetLayerId.clear();
+    layer->setMeasurementData(storedData);
+    if (const auto bounds = measurementBounds(storedData); bounds.has_value()) {
+        layer->setGeographicBounds(*bounds);
+    }
+
+    sceneController_.removeLayer(layer->id());
+    sceneController_.addLayer(layer);
+    return true;
+}
+
 void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data) {
     const std::size_t minPointCount = data.kind == MeasurementKind::Area ? 3u : 2u;
     if (data.points.size() < minPointCount) {
-        window_.statusBar()->showMessage(u"量测点数不足，未生成结果。"_s, 3000);
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测点数不足，未生成结果。"), 3000);
+        return;
+    }
+
+    if (!data.targetLayerId.empty()) {
+        const auto layer = layerManager_.findById(data.targetLayerId);
+        if (!layer || layer->kind() != LayerKind::Measurement) {
+            window_.statusBar()->showMessage(QString::fromUtf8(u8"量测编辑失败：未找到原结果。"), 3000);
+            return;
+        }
+
+        if (!updateMeasurementLayer(layer, data)) {
+            window_.statusBar()->showMessage(QString::fromUtf8(u8"量测编辑保存失败。"), 3000);
+            return;
+        }
+
+        window_.selectLayerRow(layer->id());
+        showLayerDetails(layer->id());
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果已更新。"), 3000);
         return;
     }
 
     const QString layerId = QString(u"measurement-%1"_s).arg(QDateTime::currentMSecsSinceEpoch());
     const QString sourcePath = measurementTempPath(layerId);
     if (!writeMeasurementGeoJson(sourcePath, data)) {
-        window_.statusBar()->showMessage(u"量测结果保存失败。"_s, 3000);
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果保存失败。"), 3000);
         return;
     }
 
@@ -468,14 +511,16 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
         layerName.toUtf8().toStdString(),
         sourcePath.toUtf8().toStdString(),
         LayerKind::Measurement);
-    layer->setMeasurementData(data);
-    if (const auto bounds = measurementBounds(data); bounds.has_value()) {
+    MeasurementLayerData storedData = data;
+    storedData.targetLayerId.clear();
+    layer->setMeasurementData(storedData);
+    if (const auto bounds = measurementBounds(storedData); bounds.has_value()) {
         layer->setGeographicBounds(*bounds);
     }
 
     if (!layerManager_.addLayer(layer)) {
         QFile::remove(sourcePath);
-        window_.statusBar()->showMessage(u"量测结果添加失败。"_s, 3000);
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"量测结果添加失败。"), 3000);
         return;
     }
 
@@ -484,7 +529,41 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
     window_.selectLayerRow(layer->id());
     showLayerDetails(layer->id());
     window_.statusBar()->showMessage(
-        data.kind == MeasurementKind::Area ? u"测面结果已保留。"_s : u"测距结果已保留。"_s,
+        data.kind == MeasurementKind::Area
+            ? QString::fromUtf8(u8"测面结果已保留。")
+            : QString::fromUtf8(u8"测距结果已保留。"),
+        3000);
+}
+
+void ApplicationController::editSelectedMeasurement() {
+    const QString currentLayerId = window_.currentLayerId();
+    if (currentLayerId.isEmpty()) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"请先选择一条量测结果。"), 3000);
+        return;
+    }
+
+    const auto layer = layerManager_.findById(currentLayerId.toStdString());
+    if (!layer || layer->kind() != LayerKind::Measurement) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"当前选中的不是量测结果。"), 3000);
+        return;
+    }
+
+    const auto measurementData = layer->measurementData();
+    if (!measurementData.has_value()) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"该条量测数据不完整，无法继续编辑。"), 3000);
+        return;
+    }
+
+    MeasurementLayerData editable = *measurementData;
+    editable.targetLayerId = layer->id();
+    window_.setActiveToolAction(editable.kind == MeasurementKind::Area
+                                    ? static_cast<int>(ToolId::MeasureArea)
+                                    : static_cast<int>(ToolId::Measure));
+    window_.globeWidget()->toolManager().startMeasurementEditing(*window_.globeWidget(), editable);
+    window_.statusBar()->showMessage(
+        editable.kind == MeasurementKind::Area
+            ? QString::fromUtf8(u8"已进入测面编辑状态。")
+            : QString::fromUtf8(u8"已进入测距编辑状态。"),
         3000);
 }
 

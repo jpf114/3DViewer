@@ -42,6 +42,8 @@ public:
                              const std::optional<MeasurementLayerData> &measurementData = std::nullopt);
     void clearLayerProperties();
     void setRecentFiles(const QStringList &files);
+    QString currentLayerId() const;
+    void setActiveToolAction(int toolId);
 
 signals:
     void importDataRequested(const QString &path);
@@ -54,6 +56,7 @@ signals:
     void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
     void toolChanged(int toolId);
     void undoMeasurementRequested();
+    void editSelectedMeasurementRequested();
     void resetViewRequested();
     void zoomToLayerRequested(const QString &layerId);
     void screenshotRequested();
@@ -78,6 +81,7 @@ private:
     QAction *measureAreaAction_;
     QAction *clearMeasureAction_;
     QAction *undoMeasureAction_;
+    QAction *editMeasureAction_;
     QAction *homeAction_;
     QAction *screenshotAction_;
     QActionGroup *toolGroup_;

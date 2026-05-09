@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+#include "layers/MeasurementLayerData.h"
+
 class GlobeWidget;
 class MapTool;
 class QMouseEvent;
@@ -25,6 +27,7 @@ public:
     void mouseMoveEvent(GlobeWidget &widget, QMouseEvent *event);
     void mousePressEvent(GlobeWidget &widget, QMouseEvent *event);
     void mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event);
+    void startMeasurementEditing(GlobeWidget &widget, const MeasurementLayerData &data);
     void clearActiveToolState(GlobeWidget &widget);
     void undoActiveToolState(GlobeWidget &widget);
 

@@ -3,6 +3,7 @@
 #include <type_traits>
 
 #include <QApplication>
+#include <QAction>
 #include <QDoubleSpinBox>
 #include <QKeyEvent>
 #include <QString>
@@ -24,6 +25,19 @@ int main(int argc, char **argv) {
     QKeyEvent backspaceEvent(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
     QApplication::sendEvent(&window, &backspaceEvent);
     if (!undoRequested) {
+        return EXIT_FAILURE;
+    }
+
+    bool editRequested = false;
+    QObject::connect(&window, &MainWindow::editSelectedMeasurementRequested, [&editRequested]() {
+        editRequested = true;
+    });
+    auto *editAction = window.findChild<QAction *>("editMeasureAction");
+    if (!editAction) {
+        return EXIT_FAILURE;
+    }
+    editAction->trigger();
+    if (!editRequested) {
         return EXIT_FAILURE;
     }
 
