@@ -122,3 +122,15 @@ void LayerTreeDock::removeLayer(const std::string &id) {
         }
     }
 }
+
+void LayerTreeDock::selectLayer(const std::string &id) {
+    const QString qId = QString::fromUtf8(id.c_str(), static_cast<int>(id.size()));
+    for (int i = 0; i < tree_->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *item = tree_->topLevelItem(i);
+        if (item->data(0, Qt::UserRole).toString() == qId) {
+            tree_->setCurrentItem(item);
+            tree_->scrollToItem(item);
+            return;
+        }
+    }
+}

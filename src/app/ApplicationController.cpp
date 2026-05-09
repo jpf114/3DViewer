@@ -24,7 +24,6 @@ using namespace Qt::Literals::StringLiterals;
 #include "data/LayerConfig.h"
 #include "data/MapConfig.h"
 #include "globe/GlobeWidget.h"
-#include "globe/MeasurementUtils.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
 #include "layers/LayerManager.h"
@@ -110,8 +109,23 @@ std::optional<LayerKind> parseLayerKind(const std::string &kind) {
     return std::nullopt;
 }
 
-QString measurementLayerName(const MeasurementLayerData &data) {
-    return data.kind == MeasurementKind::Area ? u"测面结果"_s : u"测距结果"_s;
+QString measurementLayerBaseName(MeasurementKind kind) {
+    return kind == MeasurementKind::Area ? u"测面结果"_s : u"测距结果"_s;
+}
+
+int nextMeasurementIndex(const LayerManager &layerManager, MeasurementKind kind) {
+    int count = 0;
+    for (const auto &layer : layerManager.layers()) {
+        if (!layer || layer->kind() != LayerKind::Measurement) {
+            continue;
+        }
+        const auto measurementData = layer->measurementData();
+        if (!measurementData.has_value() || measurementData->kind != kind) {
+            continue;
+        }
+        ++count;
+    }
+    return count + 1;
 }
 
 std::optional<GeographicBounds> measurementBounds(const MeasurementLayerData &data) {
@@ -435,9 +449,13 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
         return;
     }
 
+    const QString layerName = QString(u"%1 %2"_s)
+        .arg(measurementLayerBaseName(data.kind))
+        .arg(nextMeasurementIndex(layerManager_, data.kind));
+
     auto layer = std::make_shared<Layer>(
         layerId.toStdString(),
-        measurementLayerName(data).toUtf8().toStdString(),
+        layerName.toUtf8().toStdString(),
         sourcePath.toUtf8().toStdString(),
         LayerKind::Measurement);
     layer->setMeasurementData(data);
@@ -453,6 +471,7 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
 
     sceneController_.addLayer(layer);
     window_.addLayerRow(*layer);
+    window_.selectLayerRow(layer->id());
     showLayerDetails(layer->id());
     window_.statusBar()->showMessage(
         data.kind == MeasurementKind::Area ? u"测面结果已保留。"_s : u"测距结果已保留。"_s,

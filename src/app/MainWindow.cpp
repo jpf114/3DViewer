@@ -186,6 +186,10 @@ void MainWindow::removeLayerRow(const std::string &layerId) {
     layerDock_->removeLayer(layerId);
 }
 
+void MainWindow::selectLayerRow(const std::string &layerId) {
+    layerDock_->selectLayer(layerId);
+}
+
 void MainWindow::showLayerDetails(const QString &text) {
     const QStringList lines = text.split('\n');
     QStringList summaryLines;

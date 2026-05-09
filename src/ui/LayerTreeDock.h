@@ -13,6 +13,7 @@ public:
     explicit LayerTreeDock(QWidget *parent = nullptr);
     void addLayer(const std::string &id, const std::string &name, bool visible, LayerKind kind);
     void removeLayer(const std::string &id);
+    void selectLayer(const std::string &id);
     QString currentLayerId() const;
     QTreeWidget *tree() const;
 
