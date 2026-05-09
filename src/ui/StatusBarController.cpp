@@ -3,14 +3,11 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QStatusBar>
-#include <QStringLiteral>
-
-using namespace Qt::Literals::StringLiterals;
 
 StatusBarController::StatusBarController(QMainWindow *window)
     : QObject(window),
-      cursorLabel_(new QLabel(u"经度：-，纬度：-，高程：-"_s, window)),
-      measurementLabel_(new QLabel(u"测距：未开始"_s, window)) {
+      cursorLabel_(new QLabel(QString::fromUtf8(u8"经度：-，纬度：-，高程：-"), window)),
+      measurementLabel_(new QLabel(QString::fromUtf8(u8"测距：未开始"), window)) {
     window->statusBar()->addPermanentWidget(cursorLabel_);
     window->statusBar()->addPermanentWidget(measurementLabel_);
 }

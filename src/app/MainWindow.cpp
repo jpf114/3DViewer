@@ -10,11 +10,8 @@
 #include <QMenuBar>
 #include <QMimeData>
 #include <QSettings>
-#include <QStringLiteral>
 #include <QToolBar>
 #include <QUrl>
-
-using namespace Qt::Literals::StringLiterals;
 
 #include "data/DataImporter.h"
 #include "globe/GlobeWidget.h"
@@ -26,6 +23,7 @@ using namespace Qt::Literals::StringLiterals;
 #include "ui/StatusBarController.h"
 
 namespace {
+
 constexpr int kMaxRecentFiles = 5;
 constexpr const char *kRecentFilesKey = "recentFiles";
 
@@ -34,13 +32,13 @@ QString modelFilterText() {
     for (const auto &extension : DataImporter::supportedModelExtensions()) {
         patterns.append(QString("*%1").arg(QString::fromStdString(extension)));
     }
-    return QString(u"三维模型 (%1)"_s).arg(patterns.join(' '));
+    return QString::fromUtf8(u8"三维模型 (%1)").arg(patterns.join(' '));
 }
 
 bool splitKeyValue(const QString &line, QString *key, QString *value) {
     int separator = line.indexOf(':');
     if (separator <= 0) {
-        separator = line.indexOf(u'：');
+        separator = line.indexOf(QChar(0xFF1A));
     }
     if (separator <= 0) {
         return false;
@@ -52,13 +50,13 @@ bool splitKeyValue(const QString &line, QString *key, QString *value) {
 }
 
 void showMeasureHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(u"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"_s);
-    statusController->setMeasurementText(u"测距：未开始"_s);
+    propertyDock->showText(QString::fromUtf8(u8"测距：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
+    statusController->setMeasurementText(QString::fromUtf8(u8"测距：未开始"));
 }
 
 void showMeasureAreaHint(PropertyDock *propertyDock, StatusBarController *statusController) {
-    propertyDock->showText(u"测面：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"_s);
-    statusController->setMeasurementText(u"测面：未开始"_s);
+    propertyDock->showText(QString::fromUtf8(u8"测面：左键添加点，右键保留结果，Backspace 撤销最后一点，Esc 或工具栏清空。"));
+    statusController->setMeasurementText(QString::fromUtf8(u8"测面：未开始"));
 }
 
 } // namespace
@@ -69,7 +67,7 @@ MainWindow::MainWindow(QWidget *parent)
       layerDock_(new LayerTreeDock(this)),
       propertyDock_(new PropertyDock(this)),
       statusController_(new StatusBarController(this)) {
-    setWindowTitle(u"三维地球浏览器"_s);
+    setWindowTitle(QString::fromUtf8(u8"三维地球浏览器"));
     resize(1600, 900);
     setAcceptDrops(true);
     setCentralWidget(globeWidget_);
@@ -79,75 +77,101 @@ MainWindow::MainWindow(QWidget *parent)
     auto &icons = IconManager::instance();
     const QColor toolColor("#4F637A");
 
-    auto *fileMenu = menuBar()->addMenu(u"文件(&F)"_s);
-    auto *importAction = fileMenu->addAction(icons.icon("cloud-arrow-up-regular.svg", 16, toolColor), u"导入数据..."_s);
+    auto *fileMenu = menuBar()->addMenu(QString::fromUtf8(u8"文件(&F)"));
+    auto *importAction = fileMenu->addAction(
+        icons.icon("cloud-arrow-up-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"导入数据..."));
     importAction->setShortcut(QKeySequence::Open);
     connect(importAction, &QAction::triggered, this, [this]() {
         const QString filter =
-            QString(u"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;%1;;所有文件 (*)"_s)
+            QString::fromUtf8(u8"影像数据 (*.tif *.tiff *.img *.asc *.srtm *.hgt *.dem *.vrt);;矢量数据 (*.shp *.geojson *.gpkg *.kml *.gml *.json);;%1;;所有文件 (*)")
                 .arg(modelFilterText());
-        const QString path = QFileDialog::getOpenFileName(this, u"导入数据"_s, QString(), filter);
+        const QString path = QFileDialog::getOpenFileName(
+            this,
+            QString::fromUtf8(u8"导入数据"),
+            QString(),
+            filter);
         if (!path.isEmpty()) {
             emit importDataRequested(path);
         }
     });
 
-    recentMenu_ = fileMenu->addMenu(u"最近打开"_s);
+    recentMenu_ = fileMenu->addMenu(QString::fromUtf8(u8"最近打开"));
     QSettings settings;
     recentFiles_ = settings.value(kRecentFilesKey).toStringList();
     updateRecentMenu();
 
     fileMenu->addSeparator();
-    auto *screenshotMenuAction = fileMenu->addAction(icons.icon("copy-regular.svg", 16, toolColor), u"截图保存..."_s);
+    auto *screenshotMenuAction = fileMenu->addAction(
+        icons.icon("copy-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"截图保存..."));
     screenshotMenuAction->setShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_S);
     connect(screenshotMenuAction, &QAction::triggered, this, &MainWindow::screenshotRequested);
 
-    auto *toolBar = addToolBar(u"工具"_s);
+    auto *toolBar = addToolBar(QString::fromUtf8(u8"工具"));
     toolBar->setMovable(false);
     toolBar->setIconSize(QSize(20, 20));
 
     toolGroup_ = new QActionGroup(this);
-    panAction_ = toolBar->addAction(icons.icon("arrows-out-regular.svg", 20, toolColor), u"平移"_s);
+    panAction_ = toolBar->addAction(
+        icons.icon("arrows-out-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"平移"));
     panAction_->setCheckable(true);
     panAction_->setChecked(true);
     panAction_->setActionGroup(toolGroup_);
-    panAction_->setToolTip(u"平移工具 (1)"_s);
+    panAction_->setToolTip(QString::fromUtf8(u8"平移工具 (1)"));
 
-    pickAction_ = toolBar->addAction(icons.icon("crosshair-regular.svg", 20, toolColor), u"拾取"_s);
+    pickAction_ = toolBar->addAction(
+        icons.icon("crosshair-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"拾取"));
     pickAction_->setCheckable(true);
     pickAction_->setActionGroup(toolGroup_);
-    pickAction_->setToolTip(u"拾取工具 (2)"_s);
+    pickAction_->setToolTip(QString::fromUtf8(u8"拾取工具 (2)"));
 
-    measureAction_ = toolBar->addAction(icons.icon("ruler-regular.svg", 20, toolColor), u"测距"_s);
+    measureAction_ = toolBar->addAction(
+        icons.icon("ruler-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"测距"));
     measureAction_->setCheckable(true);
     measureAction_->setActionGroup(toolGroup_);
-    measureAction_->setToolTip(u"测距工具 (3)"_s);
+    measureAction_->setToolTip(QString::fromUtf8(u8"测距工具 (3)"));
 
-    measureAreaAction_ = toolBar->addAction(icons.icon("polygon-regular.svg", 20, toolColor), u"测面"_s);
+    measureAreaAction_ = toolBar->addAction(
+        icons.icon("polygon-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"测面"));
     measureAreaAction_->setCheckable(true);
     measureAreaAction_->setActionGroup(toolGroup_);
-    measureAreaAction_->setToolTip(u"测面工具 (4)"_s);
+    measureAreaAction_->setToolTip(QString::fromUtf8(u8"测面工具 (4)"));
 
-    editMeasureAction_ = toolBar->addAction(icons.icon("ruler-regular.svg", 20, toolColor), u"编辑量测"_s);
+    editMeasureAction_ = toolBar->addAction(
+        icons.icon("ruler-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"编辑量测"));
     editMeasureAction_->setObjectName("editMeasureAction");
-    editMeasureAction_->setToolTip(u"继续编辑当前选中的量测结果"_s);
+    editMeasureAction_->setToolTip(QString::fromUtf8(u8"继续编辑当前选中的量测结果"));
 
-    undoMeasureAction_ = toolBar->addAction(icons.icon("arrow-bend-up-right-regular.svg", 20, toolColor), u"撤销量测点"_s);
+    undoMeasureAction_ = toolBar->addAction(
+        icons.icon("arrow-bend-up-right-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"撤销量测点"));
     undoMeasureAction_->setObjectName("undoMeasureAction");
-    undoMeasureAction_->setToolTip(u"撤销当前量测的最后一个点 (Backspace)"_s);
+    undoMeasureAction_->setToolTip(QString::fromUtf8(u8"撤销当前量测的最后一个点 (Backspace)"));
 
-    clearMeasureAction_ = toolBar->addAction(icons.icon("eraser-regular.svg", 20, toolColor), u"清空量测"_s);
+    clearMeasureAction_ = toolBar->addAction(
+        icons.icon("eraser-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"清空量测"));
     clearMeasureAction_->setObjectName("clearMeasureAction");
-    clearMeasureAction_->setToolTip(u"清空当前量测结果 (Esc)"_s);
+    clearMeasureAction_->setToolTip(QString::fromUtf8(u8"清空当前量测结果 (Esc)"));
 
     toolBar->addSeparator();
 
-    homeAction_ = toolBar->addAction(icons.icon("arrows-clockwise-regular.svg", 20, toolColor), u"归位"_s);
-    homeAction_->setToolTip(u"视图归位 (Ctrl+Shift+H)"_s);
+    homeAction_ = toolBar->addAction(
+        icons.icon("arrows-clockwise-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"归位"));
+    homeAction_->setToolTip(QString::fromUtf8(u8"视图归位 (Ctrl+Shift+H)"));
     connect(homeAction_, &QAction::triggered, this, &MainWindow::resetViewRequested);
 
-    screenshotAction_ = toolBar->addAction(icons.icon("copy-regular.svg", 20, toolColor), u"截图"_s);
-    screenshotAction_->setToolTip(u"截图保存 (Ctrl+Shift+S)"_s);
+    screenshotAction_ = toolBar->addAction(
+        icons.icon("copy-regular.svg", 20, toolColor),
+        QString::fromUtf8(u8"截图"));
+    screenshotAction_->setToolTip(QString::fromUtf8(u8"截图保存 (Ctrl+Shift+S)"));
     connect(screenshotAction_, &QAction::triggered, this, &MainWindow::screenshotRequested);
 
     connect(toolGroup_, &QActionGroup::triggered, this, [this](QAction *action) {
@@ -192,7 +216,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(clearMeasureAction_, &QAction::triggered, this, [this]() {
         globeWidget_->toolManager().clearActiveToolState(*globeWidget_);
     });
-    propertyDock_->showText(u"未选择图层。"_s);
+    propertyDock_->showText(QString::fromUtf8(u8"未选择图层。"));
     refreshToolActionStates();
 }
 
@@ -322,7 +346,7 @@ void MainWindow::setRecentFiles(const QStringList &files) {
 void MainWindow::updateRecentMenu() {
     recentMenu_->clear();
     if (recentFiles_.isEmpty()) {
-        auto *emptyAction = recentMenu_->addAction(u"(无)"_s);
+        auto *emptyAction = recentMenu_->addAction(QString::fromUtf8(u8"(无)"));
         emptyAction->setEnabled(false);
         return;
     }
