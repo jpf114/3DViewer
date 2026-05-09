@@ -2,13 +2,13 @@
 
 #include <QMouseEvent>
 #include <QString>
-#include <QStringLiteral>
 #include <QStringList>
 
 using namespace Qt::Literals::StringLiterals;
 
 #include "globe/GlobeWidget.h"
 #include "globe/PickResult.h"
+#include "layers/MeasurementLayerData.h"
 
 namespace {
 
@@ -21,7 +21,7 @@ QString formatDistance(double meters) {
 
 QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points) {
     if (points.empty()) {
-        return u"测距：未开始。\n操作：左键添加点，右键或工具栏清空。"_s;
+        return u"测距：未开始。\n操作：左键添加点，右键结束并保留，Esc 或工具栏清空草稿。"_s;
     }
 
     QStringList lines;
@@ -37,7 +37,7 @@ QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points)
         lines.append(QString(u"最近一段：%1"_s).arg(formatDistance(segment)));
     }
 
-    lines.append(u"操作：左键继续，右键或工具栏清空。"_s);
+    lines.append(u"操作：左键继续，右键结束并保留，Esc 或工具栏清空草稿。"_s);
     return lines.join('\n');
 }
 
@@ -45,7 +45,7 @@ QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points)
 
 void MeasureTool::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
     if (event->button() == Qt::RightButton) {
-        clear(widget);
+        commit(widget);
         return;
     }
 
@@ -68,6 +68,23 @@ void MeasureTool::clear(GlobeWidget &widget) {
     points_.clear();
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(u"测距：未开始"_s);
+}
+
+void MeasureTool::commit(GlobeWidget &widget) {
+    if (points_.size() < 2) {
+        clear(widget);
+        return;
+    }
+
+    MeasurementLayerData data;
+    data.kind = MeasurementKind::Distance;
+    data.points = points_;
+    data.lengthMeters = globe::polylineLengthMeters(points_);
+    emit widget.measurementCommitted(data);
+
+    points_.clear();
+    emit widget.measurementTextChanged(u"测距：结果已保留，可继续开始下一条。"_s);
+    emit widget.measurementStatusChanged(u"测距：已保存结果"_s);
 }
 
 void MeasureTool::publishMeasurement(GlobeWidget &widget) const {

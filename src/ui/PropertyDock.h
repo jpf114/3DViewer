@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "data/DataSourceDescriptor.h"
+#include "layers/MeasurementLayerData.h"
 
 struct RasterMetadata;
 struct VectorLayerInfo;
@@ -32,7 +33,8 @@ public:
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,
                              const std::optional<VectorLayerInfo> &vectorMeta,
-                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt);
+                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt,
+                             const std::optional<MeasurementLayerData> &measurementData = std::nullopt);
     void clearLayerProperties();
 
 signals:
@@ -67,6 +69,8 @@ private:
     QDoubleSpinBox *modelHeightSpin_;
     QDoubleSpinBox *modelScaleSpin_;
     QDoubleSpinBox *modelHeadingSpin_;
+    QGroupBox *measurementGroup_;
+    QFormLayout *measurementForm_;
     QGroupBox *rasterGroup_;
     QFormLayout *rasterForm_;
     QTableWidget *bandTable_;

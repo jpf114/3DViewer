@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "data/DataSourceDescriptor.h"
+#include "layers/MeasurementLayerData.h"
 
 class QCloseEvent;
 struct RasterMetadata;
@@ -36,7 +37,8 @@ public:
                              const QString &source, bool visible, double opacity,
                              const std::optional<RasterMetadata> &rasterMeta,
                              const std::optional<VectorLayerInfo> &vectorMeta,
-                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt);
+                             const std::optional<ModelPlacement> &modelPlacement = std::nullopt,
+                             const std::optional<MeasurementLayerData> &measurementData = std::nullopt);
     void clearLayerProperties();
     void setRecentFiles(const QStringList &files);
 

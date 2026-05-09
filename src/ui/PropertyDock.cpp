@@ -44,6 +44,20 @@ int attributePriority(const QString &name) {
     return 10;
 }
 
+QString formatDistance(double meters) {
+    if (meters >= 1000.0) {
+        return QString(u"%1 km"_s).arg(meters / 1000.0, 0, 'f', 3);
+    }
+    return QString(u"%1 m"_s).arg(meters, 0, 'f', 1);
+}
+
+QString formatArea(double squareMeters) {
+    if (squareMeters >= 1000000.0) {
+        return QString(u"%1 km²"_s).arg(squareMeters / 1000000.0, 0, 'f', 3);
+    }
+    return QString(u"%1 m²"_s).arg(squareMeters, 0, 'f', 1);
+}
+
 QLabel *makeValueLabel(const QString &text, QWidget *parent, bool wordWrap = false) {
     auto *label = new QLabel(text, parent);
     label->setWordWrap(wordWrap);
@@ -150,6 +164,13 @@ void PropertyDock::setupUi() {
     modelForm_->addRow(u"航向:"_s, modelHeadingSpin_);
     modelGroup_->setVisible(false);
     layout->addWidget(modelGroup_);
+
+    measurementGroup_ = new QGroupBox(u"量测结果"_s, propertiesWidget_);
+    measurementForm_ = new QFormLayout(measurementGroup_);
+    measurementForm_->setLabelAlignment(Qt::AlignRight);
+    measurementForm_->setSpacing(6);
+    measurementGroup_->setVisible(false);
+    layout->addWidget(measurementGroup_);
 
     opacityWidget_ = new QWidget(propertiesWidget_);
     auto *opacityLayout = new QHBoxLayout(opacityWidget_);
@@ -280,7 +301,8 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
                                        const QString &source, bool visible, double opacity,
                                        const std::optional<RasterMetadata> &rasterMeta,
                                        const std::optional<VectorLayerInfo> &vectorMeta,
-                                       const std::optional<ModelPlacement> &modelPlacement) {
+                                       const std::optional<ModelPlacement> &modelPlacement,
+                                       const std::optional<MeasurementLayerData> &measurementData) {
     currentLayerId_ = layerId;
     text_->setPlainText(u"当前显示选中图层属性。"_s);
 
@@ -316,6 +338,25 @@ void PropertyDock::showLayerProperties(const QString &layerId, const QString &na
         modelGroup_->setVisible(true);
     } else {
         modelGroup_->setVisible(false);
+    }
+
+    if (measurementData.has_value()) {
+        clearForm(measurementForm_);
+        measurementForm_->addRow(u"类型:"_s,
+                                 makeValueLabel(measurementData->kind == MeasurementKind::Area ? u"测面"_s : u"测距"_s,
+                                                measurementGroup_));
+        measurementForm_->addRow(u"点数:"_s,
+                                 makeValueLabel(QString::number(measurementData->points.size()), measurementGroup_));
+        measurementForm_->addRow(
+            measurementData->kind == MeasurementKind::Area ? u"周长:"_s : u"总长:"_s,
+            makeValueLabel(formatDistance(measurementData->lengthMeters), measurementGroup_));
+        if (measurementData->kind == MeasurementKind::Area) {
+            measurementForm_->addRow(u"面积:"_s,
+                                     makeValueLabel(formatArea(measurementData->areaSquareMeters), measurementGroup_));
+        }
+        measurementGroup_->setVisible(true);
+    } else {
+        measurementGroup_->setVisible(false);
     }
 
     const int bandCount = rasterMeta.has_value() ? rasterMeta->bandCount : 0;
@@ -437,6 +478,7 @@ void PropertyDock::clearLayerProperties() {
     modelScaleSpin_->blockSignals(false);
     modelHeadingSpin_->blockSignals(false);
     modelGroup_->setVisible(false);
+    measurementGroup_->setVisible(false);
     rasterGroup_->setVisible(false);
     bandTable_->setVisible(false);
     vectorGroup_->setVisible(false);

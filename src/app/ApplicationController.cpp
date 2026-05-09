@@ -1,18 +1,20 @@
 #include "app/ApplicationController.h"
 
-#include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMessageBox>
-#include <QObject>
 #include <QSettings>
 #include <QStatusBar>
-#include <QString>
-#include <QStringList>
-#include <QStringLiteral>
 #include <spdlog/spdlog.h>
+
+#include <algorithm>
 #include <vector>
 
 using namespace Qt::Literals::StringLiterals;
@@ -22,6 +24,7 @@ using namespace Qt::Literals::StringLiterals;
 #include "data/LayerConfig.h"
 #include "data/MapConfig.h"
 #include "globe/GlobeWidget.h"
+#include "globe/MeasurementUtils.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
 #include "layers/LayerManager.h"
@@ -32,6 +35,10 @@ namespace {
 constexpr int kMaxRecentFiles = 5;
 constexpr const char *kRecentFilesKey = "recentFiles";
 
+QString utf8(const std::string &text) {
+    return QString::fromUtf8(text.c_str(), static_cast<int>(text.size()));
+}
+
 QString layerKindToText(LayerKind kind) {
     switch (kind) {
     case LayerKind::Imagery:
@@ -40,6 +47,8 @@ QString layerKindToText(LayerKind kind) {
         return u"高程"_s;
     case LayerKind::Vector:
         return u"矢量"_s;
+    case LayerKind::Measurement:
+        return u"量测"_s;
     case LayerKind::Model:
         return u"三维模型"_s;
     case LayerKind::Chart:
@@ -49,10 +58,6 @@ QString layerKindToText(LayerKind kind) {
     }
 
     return u"未知"_s;
-}
-
-QString utf8(const std::string &s) {
-    return QString::fromUtf8(s.c_str(), static_cast<int>(s.size()));
 }
 
 QString modelFormatText() {
@@ -83,6 +88,7 @@ bool isRenderableLayerKind(LayerKind kind) {
     case LayerKind::Imagery:
     case LayerKind::Elevation:
     case LayerKind::Vector:
+    case LayerKind::Measurement:
     case LayerKind::Model:
         return true;
     case LayerKind::Chart:
@@ -97,10 +103,88 @@ std::optional<LayerKind> parseLayerKind(const std::string &kind) {
     if (kind == "imagery") return LayerKind::Imagery;
     if (kind == "elevation") return LayerKind::Elevation;
     if (kind == "vector") return LayerKind::Vector;
+    if (kind == "measurement") return LayerKind::Measurement;
     if (kind == "model") return LayerKind::Model;
     if (kind == "chart") return LayerKind::Chart;
     if (kind == "scientific") return LayerKind::Scientific;
     return std::nullopt;
+}
+
+QString measurementLayerName(const MeasurementLayerData &data) {
+    return data.kind == MeasurementKind::Area ? u"测面结果"_s : u"测距结果"_s;
+}
+
+std::optional<GeographicBounds> measurementBounds(const MeasurementLayerData &data) {
+    if (data.points.empty()) {
+        return std::nullopt;
+    }
+
+    GeographicBounds bounds{
+        data.points.front().longitude,
+        data.points.front().latitude,
+        data.points.front().longitude,
+        data.points.front().latitude,
+    };
+
+    for (const auto &point : data.points) {
+        bounds.west = (std::min)(bounds.west, point.longitude);
+        bounds.south = (std::min)(bounds.south, point.latitude);
+        bounds.east = (std::max)(bounds.east, point.longitude);
+        bounds.north = (std::max)(bounds.north, point.latitude);
+    }
+
+    return bounds;
+}
+
+QString measurementTempPath(const QString &layerId) {
+    const QString dirPath = QDir::temp().filePath(u"3dviewer_measurements"_s);
+    QDir().mkpath(dirPath);
+    return QDir(dirPath).filePath(layerId + u".geojson"_s);
+}
+
+bool writeMeasurementGeoJson(const QString &path, const MeasurementLayerData &data) {
+    QJsonArray coordinates;
+    for (const auto &point : data.points) {
+        coordinates.append(QJsonArray{point.longitude, point.latitude});
+    }
+
+    QJsonObject geometry;
+    geometry["type"] = data.kind == MeasurementKind::Area ? "Polygon" : "LineString";
+    if (data.kind == MeasurementKind::Area) {
+        if (!data.points.empty()) {
+            const auto &first = data.points.front();
+            const auto &last = data.points.back();
+            if (first.longitude != last.longitude || first.latitude != last.latitude) {
+                coordinates.append(QJsonArray{first.longitude, first.latitude});
+            }
+        }
+        geometry["coordinates"] = QJsonArray{coordinates};
+    } else {
+        geometry["coordinates"] = coordinates;
+    }
+
+    QJsonObject properties;
+    properties["kind"] = data.kind == MeasurementKind::Area ? "area" : "distance";
+    properties["pointCount"] = static_cast<int>(data.points.size());
+    properties["lengthMeters"] = data.lengthMeters;
+    properties["areaSquareMeters"] = data.areaSquareMeters;
+
+    QJsonObject feature;
+    feature["type"] = "Feature";
+    feature["properties"] = properties;
+    feature["geometry"] = geometry;
+
+    QJsonObject collection;
+    collection["type"] = "FeatureCollection";
+    collection["features"] = QJsonArray{feature};
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return false;
+    }
+
+    file.write(QJsonDocument(collection).toJson(QJsonDocument::Compact));
+    return file.flush();
 }
 
 } // namespace
@@ -163,6 +247,10 @@ ApplicationController::ApplicationController(MainWindow &window,
 
     QObject::connect(window_.globeWidget(), &GlobeWidget::terrainPickCompleted, [this](const PickResult &pick) {
         handleTerrainPick(pick);
+    });
+
+    QObject::connect(window_.globeWidget(), &GlobeWidget::measurementCommitted, [this](const MeasurementLayerData &data) {
+        addMeasurementLayer(data);
     });
 }
 
@@ -247,7 +335,8 @@ void ApplicationController::showLayerDetails(const std::string &layerId) {
         layer->opacity(),
         layer->rasterMetadata(),
         layer->vectorMetadata(),
-        layer->modelPlacement());
+        layer->modelPlacement(),
+        layer->measurementData());
 }
 
 void ApplicationController::setLayerVisibility(const std::string &layerId, bool visible) {
@@ -300,9 +389,13 @@ void ApplicationController::handleTerrainPick(const PickResult &pick) {
 
 void ApplicationController::removeLayer(const std::string &layerId) {
     spdlog::info("ApplicationController: removing layer '{}'", layerId);
+    const auto layer = layerManager_.findById(layerId);
     sceneController_.removeLayer(layerId);
     layerManager_.removeLayer(layerId);
     window_.removeLayerRow(layerId);
+    if (layer && layer->kind() == LayerKind::Measurement) {
+        QFile::remove(utf8(layer->sourceUri()));
+    }
     window_.showLayerDetails(u"未选择图层。"_s);
     window_.clearLayerProperties();
 }
@@ -326,6 +419,44 @@ void ApplicationController::setModelPlacement(const std::string &layerId, const 
     layer->setModelPlacement(placement);
     sceneController_.syncLayerState(layer);
     showLayerDetails(layerId);
+}
+
+void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data) {
+    const std::size_t minPointCount = data.kind == MeasurementKind::Area ? 3u : 2u;
+    if (data.points.size() < minPointCount) {
+        window_.statusBar()->showMessage(u"量测点数不足，未生成结果。"_s, 3000);
+        return;
+    }
+
+    const QString layerId = QString(u"measurement-%1"_s).arg(QDateTime::currentMSecsSinceEpoch());
+    const QString sourcePath = measurementTempPath(layerId);
+    if (!writeMeasurementGeoJson(sourcePath, data)) {
+        window_.statusBar()->showMessage(u"量测结果保存失败。"_s, 3000);
+        return;
+    }
+
+    auto layer = std::make_shared<Layer>(
+        layerId.toStdString(),
+        measurementLayerName(data).toUtf8().toStdString(),
+        sourcePath.toUtf8().toStdString(),
+        LayerKind::Measurement);
+    layer->setMeasurementData(data);
+    if (const auto bounds = measurementBounds(data); bounds.has_value()) {
+        layer->setGeographicBounds(*bounds);
+    }
+
+    if (!layerManager_.addLayer(layer)) {
+        QFile::remove(sourcePath);
+        window_.statusBar()->showMessage(u"量测结果添加失败。"_s, 3000);
+        return;
+    }
+
+    sceneController_.addLayer(layer);
+    window_.addLayerRow(*layer);
+    showLayerDetails(layer->id());
+    window_.statusBar()->showMessage(
+        data.kind == MeasurementKind::Area ? u"测面结果已保留。"_s : u"测距结果已保留。"_s,
+        3000);
 }
 
 void ApplicationController::setBandMapping(const std::string &layerId, int red, int green, int blue) {
@@ -416,7 +547,8 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
         }
 
         std::string resolvedPath = entry.path;
-        if (!resolvedPath.empty() && !(resolvedPath.size() >= 2 && resolvedPath[1] == ':') && resolvedPath[0] != '/' && resolvedPath[0] != '\\') {
+        if (!resolvedPath.empty() && !(resolvedPath.size() >= 2 && resolvedPath[1] == ':') &&
+            resolvedPath[0] != '/' && resolvedPath[0] != '\\') {
             resolvedPath = resourceDir + "/" + resolvedPath;
         }
 
@@ -461,6 +593,10 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
     const auto &layers = layerManager_.layers();
 
     for (const auto &layer : layers) {
+        if (layer->kind() == LayerKind::Measurement) {
+            continue;
+        }
+
         LayerEntry entry;
         entry.id = layer->id();
         entry.name = layer->name();
@@ -473,6 +609,7 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
         case LayerKind::Imagery: entry.kind = "imagery"; break;
         case LayerKind::Elevation: entry.kind = "elevation"; break;
         case LayerKind::Vector: entry.kind = "vector"; break;
+        case LayerKind::Measurement: break;
         case LayerKind::Model: entry.kind = "model"; break;
         case LayerKind::Chart: entry.kind = "chart"; break;
         case LayerKind::Scientific: entry.kind = "scientific"; break;

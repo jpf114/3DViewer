@@ -1,13 +1,17 @@
 #pragma once
 
+#include <QMetaType>
 #include <QString>
 #include <QWidget>
 
+#include "layers/MeasurementLayerData.h"
 #include "globe/PickResult.h"
 #include "globe/SceneController.h"
 
 class ToolManager;
 class QTimer;
+
+Q_DECLARE_METATYPE(MeasurementLayerData)
 
 class GlobeWidget : public QWidget {
     Q_OBJECT
@@ -24,6 +28,7 @@ signals:
     void terrainPickCompleted(const PickResult &result);
     void measurementTextChanged(const QString &text);
     void measurementStatusChanged(const QString &text);
+    void measurementCommitted(const MeasurementLayerData &data);
 
 protected:
     void mouseMoveEvent(QMouseEvent *event) override;

@@ -5,6 +5,7 @@
 
 #include "data/DataSourceDescriptor.h"
 #include "layers/GeographicBounds.h"
+#include "layers/MeasurementLayerData.h"
 #include "layers/LayerTypes.h"
 
 class Layer {
@@ -34,6 +35,9 @@ public:
     void setModelPlacement(const ModelPlacement &placement);
     std::optional<ModelPlacement> modelPlacement() const;
 
+    void setMeasurementData(const MeasurementLayerData &data);
+    std::optional<MeasurementLayerData> measurementData() const;
+
     void setBandMapping(int redBand, int greenBand, int blueBand);
     int redBand() const;
     int greenBand() const;
@@ -50,6 +54,7 @@ private:
     std::optional<RasterMetadata> rasterMetadata_;
     std::optional<VectorLayerInfo> vectorMetadata_;
     std::optional<ModelPlacement> modelPlacement_;
+    std::optional<MeasurementLayerData> measurementData_;
     int redBand_ = 1;
     int greenBand_ = 2;
     int blueBand_ = 3;

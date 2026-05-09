@@ -264,6 +264,41 @@ osg::ref_ptr<osgEarth::Layer> createSceneLayer(const Layer &layer) {
         featureLayer->setLayout(layout);
         return featureLayer;
     }
+    case LayerKind::Measurement: {
+        auto featureSource = osg::ref_ptr<osgEarth::OGRFeatureSource>(new osgEarth::OGRFeatureSource());
+        featureSource->setName(layer.name() + " Source");
+        featureSource->setURL(osgEarth::URI(layer.sourceUri()));
+
+        osgEarth::Style lineStyle("measurement-line");
+        osgEarth::Stroke lineStroke(osgEarth::Color(1.0f, 0.78f, 0.2f, 1.0f));
+        lineStroke.width() = osgEarth::Expression<osgEarth::Distance>("3.0px");
+        lineStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = lineStroke;
+        lineStyle.getOrCreate<osgEarth::LineSymbol>()->tessellation() = 20;
+        lineStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+
+        osgEarth::Style polygonStyle("measurement-polygon");
+        polygonStyle.getOrCreate<osgEarth::PolygonSymbol>()->fill() =
+            osgEarth::Fill(osgEarth::Color(1.0f, 0.78f, 0.2f, 0.25f));
+        osgEarth::Stroke polygonStroke(osgEarth::Color(1.0f, 0.78f, 0.2f, 1.0f));
+        polygonStroke.width() = osgEarth::Expression<osgEarth::Distance>("2.5px");
+        polygonStyle.getOrCreate<osgEarth::LineSymbol>()->stroke() = polygonStroke;
+        polygonStyle.getOrCreate<osgEarth::RenderSymbol>()->depthTest() = true;
+
+        auto styleSheet = osg::ref_ptr<osgEarth::StyleSheet>(new osgEarth::StyleSheet());
+        styleSheet->addStyle(lineStyle);
+        styleSheet->addStyle(polygonStyle);
+
+        osgEarth::FeatureDisplayLayout layout;
+        layout.tileSizeFactor() = 15.0f;
+        layout.addLevel(osgEarth::FeatureLevel(0.0f, 1.0e7f));
+
+        auto featureLayer = osg::ref_ptr<osgEarth::FeatureModelLayer>(new osgEarth::FeatureModelLayer());
+        featureLayer->setName(layer.name());
+        featureLayer->setFeatureSource(featureSource.get());
+        featureLayer->setStyleSheet(styleSheet.get());
+        featureLayer->setLayout(layout);
+        return featureLayer;
+    }
     case LayerKind::Chart:
     case LayerKind::Scientific:
         return nullptr;
@@ -587,7 +622,7 @@ PickResult SceneController::pickAt(int x, int y) const {
         }
 
         const auto &appLayer = appLayerIt->second;
-        if (!appLayer || appLayer->kind() != LayerKind::Vector) {
+        if (!appLayer || (appLayer->kind() != LayerKind::Vector && appLayer->kind() != LayerKind::Measurement)) {
             continue;
         }
 

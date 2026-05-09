@@ -73,6 +73,14 @@ std::optional<ModelPlacement> Layer::modelPlacement() const {
     return modelPlacement_;
 }
 
+void Layer::setMeasurementData(const MeasurementLayerData &data) {
+    measurementData_ = data;
+}
+
+std::optional<MeasurementLayerData> Layer::measurementData() const {
+    return measurementData_;
+}
+
 void Layer::setBandMapping(int redBand, int greenBand, int blueBand) {
     redBand_ = redBand;
     greenBand_ = greenBand;

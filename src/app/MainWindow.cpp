@@ -231,8 +231,10 @@ void MainWindow::showLayerProperties(const QString &layerId, const QString &name
                                      const QString &source, bool visible, double opacity,
                                      const std::optional<RasterMetadata> &rasterMeta,
                                      const std::optional<VectorLayerInfo> &vectorMeta,
-                                     const std::optional<ModelPlacement> &modelPlacement) {
-    propertyDock_->showLayerProperties(layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta, modelPlacement);
+                                     const std::optional<ModelPlacement> &modelPlacement,
+                                     const std::optional<MeasurementLayerData> &measurementData) {
+    propertyDock_->showLayerProperties(
+        layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta, modelPlacement, measurementData);
 }
 
 void MainWindow::clearLayerProperties() {

@@ -4,6 +4,7 @@
 #include <string>
 
 #include "globe/PickResult.h"
+#include "layers/MeasurementLayerData.h"
 
 struct ModelPlacement;
 class DataImporter;
@@ -35,6 +36,7 @@ private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
     void handleTerrainPick(const PickResult &pick);
     void addToRecentFiles(const QString &path);
+    void addMeasurementLayer(const MeasurementLayerData &data);
 
     MainWindow &window_;
     SceneController &sceneController_;

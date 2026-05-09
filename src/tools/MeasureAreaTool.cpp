@@ -2,13 +2,13 @@
 
 #include <QMouseEvent>
 #include <QString>
-#include <QStringLiteral>
 #include <QStringList>
 
 using namespace Qt::Literals::StringLiterals;
 
 #include "globe/GlobeWidget.h"
 #include "globe/PickResult.h"
+#include "layers/MeasurementLayerData.h"
 
 namespace {
 
@@ -28,7 +28,7 @@ QString formatArea(double squareMeters) {
 
 QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points) {
     if (points.empty()) {
-        return u"测面：未开始。\n操作：左键添加点，右键或工具栏清空。"_s;
+        return u"测面：未开始。\n操作：左键添加点，右键结束并保留，Esc 或工具栏清空草稿。"_s;
     }
 
     QStringList lines;
@@ -44,7 +44,7 @@ QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points)
     const auto &lastPoint = points.back();
     lines.append(QString(u"当前点经度：%1"_s).arg(lastPoint.longitude, 0, 'f', 6));
     lines.append(QString(u"当前点纬度：%1"_s).arg(lastPoint.latitude, 0, 'f', 6));
-    lines.append(u"操作：左键继续，右键或工具栏清空。"_s);
+    lines.append(u"操作：左键继续，右键结束并保留，Esc 或工具栏清空草稿。"_s);
     return lines.join('\n');
 }
 
@@ -52,7 +52,7 @@ QString buildMeasurementText(const std::vector<globe::MeasurementPoint> &points)
 
 void MeasureAreaTool::mouseReleaseEvent(GlobeWidget &widget, QMouseEvent *event) {
     if (event->button() == Qt::RightButton) {
-        clear(widget);
+        commit(widget);
         return;
     }
 
@@ -75,6 +75,24 @@ void MeasureAreaTool::clear(GlobeWidget &widget) {
     points_.clear();
     emit widget.measurementTextChanged(buildMeasurementText(points_));
     emit widget.measurementStatusChanged(u"测面：未开始"_s);
+}
+
+void MeasureAreaTool::commit(GlobeWidget &widget) {
+    if (points_.size() < 3) {
+        clear(widget);
+        return;
+    }
+
+    MeasurementLayerData data;
+    data.kind = MeasurementKind::Area;
+    data.points = points_;
+    data.lengthMeters = globe::polylineLengthMeters(points_);
+    data.areaSquareMeters = globe::polygonAreaSquareMeters(points_);
+    emit widget.measurementCommitted(data);
+
+    points_.clear();
+    emit widget.measurementTextChanged(u"测面：结果已保留，可继续开始下一条。"_s);
+    emit widget.measurementStatusChanged(u"测面：已保存结果"_s);
 }
 
 void MeasureAreaTool::publishMeasurement(GlobeWidget &widget) const {

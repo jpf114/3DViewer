@@ -1,0 +1,17 @@
+#pragma once
+
+#include <vector>
+
+#include "globe/MeasurementUtils.h"
+
+enum class MeasurementKind {
+    Distance,
+    Area,
+};
+
+struct MeasurementLayerData {
+    MeasurementKind kind = MeasurementKind::Distance;
+    std::vector<globe::MeasurementPoint> points;
+    double lengthMeters = 0.0;
+    double areaSquareMeters = 0.0;
+};

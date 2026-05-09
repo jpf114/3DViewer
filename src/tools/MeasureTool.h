@@ -11,6 +11,7 @@ public:
     void clear(GlobeWidget &widget) override;
 
 private:
+    void commit(GlobeWidget &widget);
     void publishMeasurement(GlobeWidget &widget) const;
 
     std::vector<globe::MeasurementPoint> points_;
