@@ -8,6 +8,7 @@
 
 #include "data/DataSourceDescriptor.h"
 #include "layers/MeasurementLayerData.h"
+#include "ui/MeasurementResultsDock.h"
 
 class QCloseEvent;
 struct RasterMetadata;
@@ -16,6 +17,7 @@ struct VectorLayerInfo;
 class GlobeWidget;
 class LayerTreeDock;
 class Layer;
+class MeasurementResultsDock;
 class PropertyDock;
 class StatusBarController;
 class QAction;
@@ -33,6 +35,11 @@ public:
     void removeLayerRow(const std::string &layerId);
     void selectLayerRow(const std::string &layerId);
     void clearLayerSelection();
+    void addOrUpdateMeasurementResultRow(const QString &layerId, const QString &name,
+                                         MeasurementKind kind, const QString &summary);
+    void removeMeasurementResultRow(const QString &layerId);
+    void selectMeasurementResultRow(const QString &layerId);
+    void clearMeasurementResultSelection();
     void showLayerDetails(const QString &text);
     void showPickDetails(const QStringList &summaryLines,
                          const QList<std::pair<QString, QString>> &attributes);
@@ -45,6 +52,7 @@ public:
     void clearLayerProperties();
     void setRecentFiles(const QStringList &files);
     QString currentLayerId() const;
+    QString currentMeasurementResultId() const;
     void setActiveToolAction(int toolId);
 
 signals:
@@ -57,6 +65,7 @@ signals:
     void layerVisibilityChanged(const QString &layerId, bool visible);
     void layerOrderChanged(const QStringList &orderedLayerIds);
     void removeLayerRequested(const QString &layerId);
+    void removeMeasurementResultsRequested(const QStringList &layerIds);
     void layerOpacityChanged(const QString &layerId, double opacity);
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
     void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);
@@ -82,6 +91,7 @@ private:
 
     GlobeWidget *globeWidget_;
     LayerTreeDock *layerDock_;
+    MeasurementResultsDock *measurementResultsDock_;
     PropertyDock *propertyDock_;
     StatusBarController *statusController_;
     QAction *panAction_;

@@ -40,6 +40,7 @@ public:
     void saveProjectAsWithDialog();
     void openProjectWithDialog();
     void clearAllMeasurements();
+    void removeMeasurements(const QStringList &layerIds);
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);

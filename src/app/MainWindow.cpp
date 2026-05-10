@@ -19,6 +19,7 @@
 #include "tools/ToolManager.h"
 #include "ui/IconManager.h"
 #include "ui/LayerTreeDock.h"
+#include "ui/MeasurementResultsDock.h"
 #include "ui/PropertyDock.h"
 #include "ui/StatusBarController.h"
 
@@ -96,6 +97,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       globeWidget_(new GlobeWidget(this)),
       layerDock_(new LayerTreeDock(this)),
+      measurementResultsDock_(new MeasurementResultsDock(this)),
       propertyDock_(new PropertyDock(this)),
       statusController_(new StatusBarController(this)) {
     setWindowTitle(QString::fromUtf8(u8"三维地球浏览器"));
@@ -103,6 +105,7 @@ MainWindow::MainWindow(QWidget *parent)
     setAcceptDrops(true);
     setCentralWidget(globeWidget_);
     addDockWidget(Qt::LeftDockWidgetArea, layerDock_);
+    addDockWidget(Qt::RightDockWidgetArea, measurementResultsDock_);
     addDockWidget(Qt::RightDockWidgetArea, propertyDock_);
 
     auto &icons = IconManager::instance();
@@ -299,6 +302,16 @@ MainWindow::MainWindow(QWidget *parent)
             emit exportSelectedMeasurementRequested();
         }
     });
+    connect(measurementResultsDock_, &MeasurementResultsDock::removeRequested, this, [this](const QString &layerId) {
+        if (!layerId.isEmpty()) {
+            emit removeLayerRequested(layerId);
+        }
+    });
+    connect(measurementResultsDock_, &MeasurementResultsDock::bulkRemoveRequested, this, [this](const QStringList &layerIds) {
+        if (!layerIds.isEmpty()) {
+            emit removeMeasurementResultsRequested(layerIds);
+        }
+    });
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);
     connect(propertyDock_, &PropertyDock::bandMappingChanged, this, &MainWindow::bandMappingChanged);
     connect(propertyDock_, &PropertyDock::modelPlacementChanged, this, &MainWindow::modelPlacementChanged);
@@ -341,8 +354,29 @@ void MainWindow::clearLayerSelection() {
     layerDock_->clearSelection();
 }
 
+void MainWindow::addOrUpdateMeasurementResultRow(const QString &layerId, const QString &name,
+                                                 MeasurementKind kind, const QString &summary) {
+    measurementResultsDock_->addOrUpdateResult(MeasurementResultItemData{layerId, name, kind, summary});
+}
+
+void MainWindow::removeMeasurementResultRow(const QString &layerId) {
+    measurementResultsDock_->removeResult(layerId);
+}
+
+void MainWindow::selectMeasurementResultRow(const QString &layerId) {
+    measurementResultsDock_->selectResult(layerId);
+}
+
+void MainWindow::clearMeasurementResultSelection() {
+    measurementResultsDock_->clearResultSelection();
+}
+
 QString MainWindow::currentLayerId() const {
     return layerDock_->currentLayerId();
+}
+
+QString MainWindow::currentMeasurementResultId() const {
+    return measurementResultsDock_->currentResultId();
 }
 
 void MainWindow::setActiveToolAction(int toolId) {
@@ -368,6 +402,7 @@ void MainWindow::setActiveToolAction(int toolId) {
 
 void MainWindow::showLayerDetails(const QString &text) {
     selectedMeasurementLayer_ = false;
+    clearMeasurementResultSelection();
     refreshToolActionStates();
 
     const QStringList lines = text.split('\n');
@@ -410,6 +445,7 @@ void MainWindow::showLayerDetails(const QString &text) {
 void MainWindow::showPickDetails(const QStringList &summaryLines,
                                  const QList<std::pair<QString, QString>> &attributes) {
     selectedMeasurementLayer_ = false;
+    clearMeasurementResultSelection();
     refreshToolActionStates();
     propertyDock_->showPickDetails(summaryLines, attributes);
 }
@@ -421,6 +457,11 @@ void MainWindow::showLayerProperties(const QString &layerId, const QString &name
                                      const std::optional<ModelPlacement> &modelPlacement,
                                      const std::optional<MeasurementLayerData> &measurementData) {
     selectedMeasurementLayer_ = measurementData.has_value();
+    if (measurementData.has_value()) {
+        selectMeasurementResultRow(layerId);
+    } else {
+        clearMeasurementResultSelection();
+    }
     refreshToolActionStates();
     propertyDock_->showLayerProperties(
         layerId, name, typeText, source, visible, opacity, rasterMeta, vectorMeta, modelPlacement, measurementData);

@@ -221,6 +221,14 @@ QString measurementLayerSummary(const MeasurementLayerData &data) {
         : formatMeasurementDistance(data.lengthMeters);
 }
 
+void syncMeasurementResult(MainWindow &window, const Layer &layer, const MeasurementLayerData &data) {
+    window.addOrUpdateMeasurementResultRow(
+        QString::fromStdString(layer.id()),
+        utf8(layer.name()),
+        data.kind,
+        measurementLayerSummary(data));
+}
+
 QString measurementLayerDisplayName(MeasurementKind kind, int index, const MeasurementLayerData &data) {
     return QString::fromUtf8(u8"%1 %2（%3）")
         .arg(measurementLayerBaseName(kind))
@@ -352,6 +360,9 @@ ApplicationController::ApplicationController(MainWindow &window,
 
     QObject::connect(&window_, &MainWindow::removeLayerRequested, [this](const QString &layerId) {
         removeLayer(layerId.toStdString());
+    });
+    QObject::connect(&window_, &MainWindow::removeMeasurementResultsRequested, [this](const QStringList &layerIds) {
+        removeMeasurements(layerIds);
     });
 
     QObject::connect(&window_, &MainWindow::layerOpacityChanged, [this](const QString &layerId, double opacity) {
@@ -604,6 +615,7 @@ void ApplicationController::removeLayer(const std::string &layerId) {
     sceneController_.removeLayer(layerId);
     layerManager_.removeLayer(layerId);
     window_.removeLayerRow(layerId);
+    window_.removeMeasurementResultRow(QString::fromStdString(layerId));
     if (layer && layer->kind() == LayerKind::Measurement) {
         QFile::remove(utf8(layer->sourceUri()));
     }
@@ -660,6 +672,7 @@ bool ApplicationController::updateMeasurementLayer(const std::shared_ptr<Layer> 
     sceneController_.removeLayer(layer->id());
     sceneController_.addLayer(layer);
     window_.renameLayerRow(layer->id(), layer->name());
+    syncMeasurementResult(window_, *layer, storedData);
     return true;
 }
 
@@ -717,6 +730,7 @@ void ApplicationController::addMeasurementLayer(const MeasurementLayerData &data
 
     sceneController_.addLayer(layer);
     window_.addLayerRow(*layer);
+    syncMeasurementResult(window_, *layer, storedData);
     window_.selectLayerRow(layer->id());
     showLayerDetails(layer->id());
     window_.statusBar()->showMessage(
@@ -943,6 +957,9 @@ void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir)
 
         sceneController_.addLayer(layer);
         window_.addLayerRow(*layer);
+        if (layer->kind() == LayerKind::Measurement && layer->measurementData().has_value()) {
+            syncMeasurementResult(window_, *layer, *layer->measurementData());
+        }
         spdlog::info("ApplicationController: persisted layer '{}' loaded", layer->id());
     }
 }
@@ -1018,6 +1035,9 @@ void ApplicationController::renameLayer(const std::string &layerId, const QStrin
 
     layer->setName(trimmed.toStdString());
     window_.renameLayerRow(layerId, layer->name());
+    if (layer->kind() == LayerKind::Measurement && layer->measurementData().has_value()) {
+        syncMeasurementResult(window_, *layer, *layer->measurementData());
+    }
     if (window_.currentLayerId().toStdString() == layerId) {
         showLayerDetails(layerId);
     }
@@ -1152,6 +1172,9 @@ bool ApplicationController::openProject(const QString &path) {
 
         sceneController_.addLayer(layer);
         window_.addLayerRow(*layer);
+        if (layer->kind() == LayerKind::Measurement && layer->measurementData().has_value()) {
+            syncMeasurementResult(window_, *layer, *layer->measurementData());
+        }
     }
 
     if (projectConfig->cameraState.has_value()) {
@@ -1238,5 +1261,20 @@ void ApplicationController::clearAllMeasurements() {
 
     for (const auto &id : measurementIds) {
         removeLayer(id);
+    }
+}
+
+void ApplicationController::removeMeasurements(const QStringList &layerIds) {
+    for (const QString &layerId : layerIds) {
+        if (layerId.isEmpty()) {
+            continue;
+        }
+
+        const auto layer = layerManager_.findById(layerId.toStdString());
+        if (!layer || layer->kind() != LayerKind::Measurement) {
+            continue;
+        }
+
+        removeLayer(layer->id());
     }
 }

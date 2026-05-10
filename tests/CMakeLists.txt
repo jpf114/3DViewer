@@ -20,6 +20,7 @@ add_executable(ApplicationSmokeTests
     ../src/tools/ToolManager.cpp
     ../src/ui/IconManager.cpp
     ../src/ui/LayerTreeDock.cpp
+    ../src/ui/MeasurementResultsDock.cpp
     ../src/ui/PropertyDock.cpp
     ../src/ui/StatusBarController.cpp
 )

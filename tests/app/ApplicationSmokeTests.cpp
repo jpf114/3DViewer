@@ -8,6 +8,7 @@
 #include <QDoubleSpinBox>
 #include <QDir>
 #include <QFile>
+#include <QItemSelectionModel>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMenuBar>
@@ -27,6 +28,7 @@
 #include "layers/LayerManager.h"
 #include "layers/LayerTypes.h"
 #include "ui/LayerTreeDock.h"
+#include "ui/MeasurementResultsDock.h"
 #include "ui/PropertyDock.h"
 
 namespace {
@@ -90,12 +92,50 @@ int main(int argc, char **argv) {
     auto *openProjectAction = window.findChild<QAction *>("openProjectAction");
     auto *saveProjectAction = window.findChild<QAction *>("saveProjectAction");
     auto *saveProjectAsAction = window.findChild<QAction *>("saveProjectAsAction");
+    auto *measurementResultsDock = window.findChild<MeasurementResultsDock *>("measurementResultsDock");
+    auto *measurementResultsTable = window.findChild<QTableWidget *>("measurementResultsTable");
+    auto *measurementResultsBulkDeleteAction = window.findChild<QAction *>("measurementResultsBulkDeleteAction");
+    auto *measurementResultsBulkExportAction = window.findChild<QAction *>("measurementResultsBulkExportAction");
     if (!require(editAction != nullptr && exportAction != nullptr &&
                      undoAction != nullptr && clearAction != nullptr &&
                      deleteSelectedMeasurementAction != nullptr && clearAllMeasurementsAction != nullptr &&
+                     measurementResultsDock != nullptr && measurementResultsTable != nullptr &&
+                     measurementResultsBulkDeleteAction != nullptr && measurementResultsBulkExportAction != nullptr &&
                      openProjectAction != nullptr && saveProjectAction != nullptr &&
                      saveProjectAsAction != nullptr,
                  "measurement and project file actions should exist")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementResultsTable->columnCount() == 3,
+                 "measurement results table should expose name/type/summary columns")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!measurementResultsBulkDeleteAction->isEnabled() &&
+                     !measurementResultsBulkExportAction->isEnabled(),
+                 "measurement results bulk actions should be disabled initially")) {
+        return EXIT_FAILURE;
+    }
+    window.addOrUpdateMeasurementResultRow("measurement-1",
+                                           "Measure 1",
+                                           MeasurementKind::Distance,
+                                           "1.000 km");
+    if (!require(measurementResultsTable->rowCount() == 1,
+                 "measurement results table should show newly added measurement rows")) {
+        return EXIT_FAILURE;
+    }
+    window.selectMeasurementResultRow("measurement-1");
+    if (!require(measurementResultsBulkDeleteAction->isEnabled() &&
+                     measurementResultsBulkExportAction->isEnabled(),
+                 "measurement results bulk actions should enable after selecting a measurement row")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(window.currentMeasurementResultId() == "measurement-1",
+                 "selected measurement result id should reflect the current table selection")) {
+        return EXIT_FAILURE;
+    }
+    window.removeMeasurementResultRow("measurement-1");
+    if (!require(measurementResultsTable->rowCount() == 0,
+                 "measurement results table should remove deleted measurement rows")) {
         return EXIT_FAILURE;
     }
     if (!require(saveProjectAction->shortcut() == QKeySequence(Qt::CTRL | Qt::Key_S),
@@ -142,6 +182,10 @@ int main(int argc, char **argv) {
     measurementData.kind = MeasurementKind::Distance;
     measurementData.points.push_back({120.0, 30.0});
     measurementData.points.push_back({121.0, 31.0});
+    window.addOrUpdateMeasurementResultRow("measurement-1",
+                                           "Measure 1",
+                                           MeasurementKind::Distance,
+                                           "1.000 km");
     window.showLayerProperties("measurement-1",
                                "Measure 1",
                                QString::fromUtf8(u8"量测"),
@@ -152,6 +196,14 @@ int main(int argc, char **argv) {
                                std::nullopt,
                                std::nullopt,
                                measurementData);
+    if (!require(measurementResultsTable->rowCount() == 1,
+                 "measurement layer properties should keep measurement results visible")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(window.currentMeasurementResultId() == "measurement-1",
+                 "showing measurement layer properties should sync measurement results selection")) {
+        return EXIT_FAILURE;
+    }
     if (!require(editAction->isEnabled() && exportAction->isEnabled(),
                  "measurement actions should enable for measurement layer")) {
         return EXIT_FAILURE;
@@ -179,6 +231,10 @@ int main(int argc, char **argv) {
     }
     if (!require(!deleteSelectedMeasurementAction->isEnabled(),
                  "delete-selected measurement action should clear with non-measurement selection")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(window.currentMeasurementResultId().isEmpty(),
+                 "non-measurement details should clear measurement result selection")) {
         return EXIT_FAILURE;
     }
     auto *windowTextEdit = window.findChild<QTextEdit *>();
@@ -621,10 +677,83 @@ int main(int argc, char **argv) {
     clearMeasurementsWindow.addLayerRow(*vectorLayerForClear);
     clearMeasurementsWindow.addLayerRow(*measurementLayerForClearA);
     clearMeasurementsWindow.addLayerRow(*measurementLayerForClearB);
+    clearMeasurementsWindow.addOrUpdateMeasurementResultRow(
+        "measurement-clear-a",
+        "Measure A",
+        MeasurementKind::Distance,
+        "1.000 km");
+    clearMeasurementsWindow.addOrUpdateMeasurementResultRow(
+        "measurement-clear-b",
+        "Measure B",
+        MeasurementKind::Distance,
+        "1.000 km");
     clearAllActionWindow->trigger();
     if (!require(clearMeasurementsLayerManager.layers().size() == 1 &&
                      clearMeasurementsLayerManager.layers().front()->id() == "vector-clear-1",
                  "clear-all measurements action should preserve non-measurement layers")) {
+        return EXIT_FAILURE;
+    }
+
+    MainWindow bulkRemoveWindow;
+    LayerManager bulkRemoveLayerManager;
+    DataImporter bulkRemoveImporter;
+    ApplicationController bulkRemoveController(
+        bulkRemoveWindow,
+        bulkRemoveWindow.globeWidget()->sceneController(),
+        bulkRemoveLayerManager,
+        bulkRemoveImporter);
+    auto *bulkRemoveAction = bulkRemoveWindow.findChild<QAction *>("measurementResultsBulkDeleteAction");
+    auto *bulkRemoveTable = bulkRemoveWindow.findChild<QTableWidget *>("measurementResultsTable");
+    if (!require(bulkRemoveAction != nullptr && bulkRemoveTable != nullptr,
+                 "measurement results bulk delete controls should exist")) {
+        return EXIT_FAILURE;
+    }
+    auto vectorLayerForBulkRemove = std::make_shared<Layer>(
+        "vector-bulk-1",
+        "Roads",
+        "memory://roads-bulk",
+        LayerKind::Vector);
+    auto measurementLayerForBulkRemoveA = std::make_shared<Layer>(
+        "measurement-bulk-a",
+        "Measure A",
+        "memory://measurement-bulk-a",
+        LayerKind::Measurement);
+    measurementLayerForBulkRemoveA->setMeasurementData(removableMeasurement);
+    auto measurementLayerForBulkRemoveB = std::make_shared<Layer>(
+        "measurement-bulk-b",
+        "Measure B",
+        "memory://measurement-bulk-b",
+        LayerKind::Measurement);
+    measurementLayerForBulkRemoveB->setMeasurementData(removableMeasurement);
+    if (!require(bulkRemoveLayerManager.addLayer(vectorLayerForBulkRemove) &&
+                     bulkRemoveLayerManager.addLayer(measurementLayerForBulkRemoveA) &&
+                     bulkRemoveLayerManager.addLayer(measurementLayerForBulkRemoveB),
+                 "bulk-remove fixtures should be added")) {
+        return EXIT_FAILURE;
+    }
+    bulkRemoveWindow.addLayerRow(*vectorLayerForBulkRemove);
+    bulkRemoveWindow.addLayerRow(*measurementLayerForBulkRemoveA);
+    bulkRemoveWindow.addLayerRow(*measurementLayerForBulkRemoveB);
+    bulkRemoveWindow.addOrUpdateMeasurementResultRow(
+        "measurement-bulk-a",
+        "Measure A",
+        MeasurementKind::Distance,
+        "1.000 km");
+    bulkRemoveWindow.addOrUpdateMeasurementResultRow(
+        "measurement-bulk-b",
+        "Measure B",
+        MeasurementKind::Distance,
+        "1.000 km");
+    bulkRemoveTable->selectionModel()->select(
+        bulkRemoveTable->model()->index(0, 0),
+        QItemSelectionModel::Select | QItemSelectionModel::Rows);
+    bulkRemoveTable->selectionModel()->select(
+        bulkRemoveTable->model()->index(1, 0),
+        QItemSelectionModel::Select | QItemSelectionModel::Rows);
+    bulkRemoveAction->trigger();
+    if (!require(bulkRemoveLayerManager.layers().size() == 1 &&
+                     bulkRemoveLayerManager.layers().front()->id() == "vector-bulk-1",
+                 "bulk delete from measurement results should preserve non-measurement layers")) {
         return EXIT_FAILURE;
     }
 
