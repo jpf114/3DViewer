@@ -95,6 +95,19 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this]() {
         updateActionStates();
+        emit currentResultChanged(currentResultId());
+    });
+    connect(zoomAction_, &QAction::triggered, this, [this]() {
+        const QString layerId = currentResultId();
+        if (!layerId.isEmpty()) {
+            emit zoomRequested(layerId);
+        }
+    });
+    connect(editAction_, &QAction::triggered, this, [this]() {
+        const QString layerId = currentResultId();
+        if (!layerId.isEmpty()) {
+            emit editRequested(layerId);
+        }
     });
     connect(deleteAction_, &QAction::triggered, this, [this]() {
         const QString layerId = currentResultId();
@@ -106,6 +119,12 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
         const QStringList layerIds = selectedResultIds();
         if (!layerIds.isEmpty()) {
             emit bulkRemoveRequested(layerIds);
+        }
+    });
+    connect(bulkExportAction_, &QAction::triggered, this, [this]() {
+        const QStringList layerIds = selectedResultIds();
+        if (!layerIds.isEmpty()) {
+            emit bulkExportRequested(layerIds);
         }
     });
 

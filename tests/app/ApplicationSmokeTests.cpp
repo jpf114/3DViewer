@@ -757,6 +757,56 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    MainWindow bulkExportWindow;
+    LayerManager bulkExportLayerManager;
+    DataImporter bulkExportImporter;
+    ApplicationController bulkExportController(
+        bulkExportWindow,
+        bulkExportWindow.globeWidget()->sceneController(),
+        bulkExportLayerManager,
+        bulkExportImporter);
+    auto measurementLayerForBulkExportA = std::make_shared<Layer>(
+        "measurement-export-a",
+        "Measure A",
+        "memory://measurement-export-a",
+        LayerKind::Measurement);
+    measurementLayerForBulkExportA->setMeasurementData(removableMeasurement);
+    auto measurementLayerForBulkExportB = std::make_shared<Layer>(
+        "measurement-export-b",
+        "Measure A",
+        "memory://measurement-export-b",
+        LayerKind::Measurement);
+    measurementLayerForBulkExportB->setMeasurementData(removableMeasurement);
+    if (!require(bulkExportLayerManager.addLayer(measurementLayerForBulkExportA) &&
+                     bulkExportLayerManager.addLayer(measurementLayerForBulkExportB),
+                 "bulk-export fixtures should be added")) {
+        return EXIT_FAILURE;
+    }
+    bulkExportWindow.addLayerRow(*measurementLayerForBulkExportA);
+    bulkExportWindow.addLayerRow(*measurementLayerForBulkExportB);
+    bulkExportWindow.addOrUpdateMeasurementResultRow(
+        "measurement-export-a",
+        "Measure A",
+        MeasurementKind::Distance,
+        "1.000 km");
+    bulkExportWindow.addOrUpdateMeasurementResultRow(
+        "measurement-export-b",
+        "Measure A",
+        MeasurementKind::Distance,
+        "1.000 km");
+    QTemporaryDir measurementExportDir;
+    if (!require(measurementExportDir.isValid(), "measurement export temp directory should be created")) {
+        return EXIT_FAILURE;
+    }
+    bulkExportController.exportMeasurements(
+        QStringList{"measurement-export-a", "measurement-export-b"},
+        measurementExportDir.path());
+    if (!require(QFileInfo::exists(measurementExportDir.filePath("Measure A.geojson")) &&
+                     QFileInfo::exists(measurementExportDir.filePath("Measure A_2.geojson")),
+                 "bulk export should write GeoJSON files with stable duplicate-name handling")) {
+        return EXIT_FAILURE;
+    }
+
     QTemporaryDir batchImportDir;
     if (!require(batchImportDir.isValid(), "batch import temp directory should be created")) {
         return EXIT_FAILURE;

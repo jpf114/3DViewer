@@ -66,6 +66,7 @@ signals:
     void layerOrderChanged(const QStringList &orderedLayerIds);
     void removeLayerRequested(const QString &layerId);
     void removeMeasurementResultsRequested(const QStringList &layerIds);
+    void exportMeasurementResultsRequested(const QStringList &layerIds);
     void layerOpacityChanged(const QString &layerId, double opacity);
     void bandMappingChanged(const QString &layerId, int red, int green, int blue);
     void modelPlacementChanged(const QString &layerId, const ModelPlacement &placement);

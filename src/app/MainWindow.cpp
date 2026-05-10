@@ -307,9 +307,31 @@ MainWindow::MainWindow(QWidget *parent)
             emit removeLayerRequested(layerId);
         }
     });
+    connect(measurementResultsDock_, &MeasurementResultsDock::zoomRequested, this, [this](const QString &layerId) {
+        if (!layerId.isEmpty()) {
+            selectLayerRow(layerId.toStdString());
+            emit zoomToLayerRequested(layerId);
+        }
+    });
+    connect(measurementResultsDock_, &MeasurementResultsDock::editRequested, this, [this](const QString &layerId) {
+        if (!layerId.isEmpty()) {
+            selectLayerRow(layerId.toStdString());
+            emit editSelectedMeasurementRequested();
+        }
+    });
     connect(measurementResultsDock_, &MeasurementResultsDock::bulkRemoveRequested, this, [this](const QStringList &layerIds) {
         if (!layerIds.isEmpty()) {
             emit removeMeasurementResultsRequested(layerIds);
+        }
+    });
+    connect(measurementResultsDock_, &MeasurementResultsDock::bulkExportRequested, this, [this](const QStringList &layerIds) {
+        if (!layerIds.isEmpty()) {
+            emit exportMeasurementResultsRequested(layerIds);
+        }
+    });
+    connect(measurementResultsDock_, &MeasurementResultsDock::currentResultChanged, this, [this](const QString &layerId) {
+        if (!layerId.isEmpty()) {
+            selectLayerRow(layerId.toStdString());
         }
     });
     connect(propertyDock_, &PropertyDock::opacityChanged, this, &MainWindow::layerOpacityChanged);

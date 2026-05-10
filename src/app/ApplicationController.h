@@ -41,6 +41,7 @@ public:
     void openProjectWithDialog();
     void clearAllMeasurements();
     void removeMeasurements(const QStringList &layerIds);
+    void exportMeasurements(const QStringList &layerIds, const QString &directoryPath = QString());
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
@@ -50,6 +51,7 @@ private:
     void addMeasurementLayer(const MeasurementLayerData &data);
     void editSelectedMeasurement();
     void exportSelectedMeasurement();
+    int exportMeasurementsToDirectory(const QStringList &layerIds, const QString &directoryPath);
     void clearCurrentProject();
 
     MainWindow &window_;

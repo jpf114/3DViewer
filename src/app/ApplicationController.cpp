@@ -328,6 +328,18 @@ bool writeMeasurementGeoJson(const QString &path, const MeasurementLayerData &da
     return file.flush();
 }
 
+QString uniqueMeasurementExportPath(const QString &directoryPath, const QString &baseName) {
+    const QString sanitizedBaseName = safeExportBaseName(baseName);
+    QString candidate = QDir(directoryPath).filePath(sanitizedBaseName + ".geojson");
+    int suffix = 2;
+    while (QFileInfo::exists(candidate)) {
+        candidate = QDir(directoryPath).filePath(
+            QString::fromUtf8(u8"%1_%2.geojson").arg(sanitizedBaseName).arg(suffix));
+        ++suffix;
+    }
+    return candidate;
+}
+
 } // namespace
 
 ApplicationController::ApplicationController(MainWindow &window,
@@ -363,6 +375,9 @@ ApplicationController::ApplicationController(MainWindow &window,
     });
     QObject::connect(&window_, &MainWindow::removeMeasurementResultsRequested, [this](const QStringList &layerIds) {
         removeMeasurements(layerIds);
+    });
+    QObject::connect(&window_, &MainWindow::exportMeasurementResultsRequested, [this](const QStringList &layerIds) {
+        exportMeasurements(layerIds);
     });
 
     QObject::connect(&window_, &MainWindow::layerOpacityChanged, [this](const QString &layerId, double opacity) {
@@ -813,6 +828,57 @@ void ApplicationController::exportSelectedMeasurement() {
 
     window_.statusBar()->showMessage(
         QString::fromUtf8(u8"量测结果已导出：%1").arg(normalizedPath),
+        5000);
+}
+
+int ApplicationController::exportMeasurementsToDirectory(const QStringList &layerIds, const QString &directoryPath) {
+    int exportedCount = 0;
+    for (const QString &layerId : layerIds) {
+        if (layerId.isEmpty()) {
+            continue;
+        }
+
+        const auto layer = layerManager_.findById(layerId.toStdString());
+        if (!layer || layer->kind() != LayerKind::Measurement) {
+            continue;
+        }
+
+        const auto measurementData = layer->measurementData();
+        if (!measurementData.has_value()) {
+            continue;
+        }
+
+        const QString outputPath = uniqueMeasurementExportPath(directoryPath, utf8(layer->name()));
+        if (writeMeasurementGeoJson(outputPath, *measurementData)) {
+            ++exportedCount;
+        }
+    }
+    return exportedCount;
+}
+
+void ApplicationController::exportMeasurements(const QStringList &layerIds, const QString &directoryPath) {
+    if (layerIds.isEmpty()) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"请先选择量测成果。"), 3000);
+        return;
+    }
+
+    QString outputDirectory = directoryPath;
+    if (outputDirectory.isEmpty()) {
+        outputDirectory = QFileDialog::getExistingDirectory(
+            &window_,
+            QString::fromUtf8(u8"选择量测结果导出目录"),
+            QDir::homePath());
+    }
+    if (outputDirectory.isEmpty()) {
+        return;
+    }
+
+    const int exportedCount = exportMeasurementsToDirectory(layerIds, outputDirectory);
+    const int failedCount = layerIds.size() - exportedCount;
+    window_.statusBar()->showMessage(
+        failedCount > 0
+            ? QString::fromUtf8(u8"量测结果批量导出完成：成功 %1，失败 %2。").arg(exportedCount).arg(failedCount)
+            : QString::fromUtf8(u8"量测结果批量导出完成：成功 %1。").arg(exportedCount),
         5000);
 }
 

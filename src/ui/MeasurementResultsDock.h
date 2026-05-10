@@ -29,8 +29,12 @@ public:
     QStringList selectedResultIds() const;
 
 signals:
+    void currentResultChanged(const QString &layerId);
+    void zoomRequested(const QString &layerId);
+    void editRequested(const QString &layerId);
     void removeRequested(const QString &layerId);
     void bulkRemoveRequested(const QStringList &layerIds);
+    void bulkExportRequested(const QStringList &layerIds);
 
 private:
     int rowForLayerId(const QString &layerId) const;
