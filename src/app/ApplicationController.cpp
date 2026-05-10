@@ -383,6 +383,10 @@ ApplicationController::ApplicationController(MainWindow &window,
         exportSelectedMeasurement();
     });
 
+    QObject::connect(&window_, &MainWindow::clearAllMeasurementsRequested, [this]() {
+        clearAllMeasurements();
+    });
+
     QObject::connect(&window_, &MainWindow::resetViewRequested, [this]() {
         resetView();
     });
@@ -1218,6 +1222,21 @@ void ApplicationController::clearCurrentProject() {
     }
 
     for (const auto &id : ids) {
+        removeLayer(id);
+    }
+}
+
+void ApplicationController::clearAllMeasurements() {
+    const auto layers = layerManager_.layers();
+    std::vector<std::string> measurementIds;
+    measurementIds.reserve(layers.size());
+    for (const auto &layer : layers) {
+        if (layer && layer->kind() == LayerKind::Measurement) {
+            measurementIds.push_back(layer->id());
+        }
+    }
+
+    for (const auto &id : measurementIds) {
         removeLayer(id);
     }
 }

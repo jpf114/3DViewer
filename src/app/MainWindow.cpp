@@ -162,6 +162,35 @@ MainWindow::MainWindow(QWidget *parent)
     screenshotMenuAction->setShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_S);
     connect(screenshotMenuAction, &QAction::triggered, this, &MainWindow::screenshotRequested);
 
+    auto *measurementMenu = menuBar()->addMenu(QString::fromUtf8(u8"量测(&M)"));
+    auto *measurementEditAction = measurementMenu->addAction(
+        icons.icon("ruler-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"编辑当前量测"));
+    connect(measurementEditAction, &QAction::triggered, this, &MainWindow::editSelectedMeasurementRequested);
+
+    auto *measurementExportAction = measurementMenu->addAction(
+        icons.icon("export-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"导出当前量测"));
+    connect(measurementExportAction, &QAction::triggered, this, &MainWindow::exportSelectedMeasurementRequested);
+
+    deleteSelectedMeasurementAction_ = measurementMenu->addAction(
+        icons.icon("minus-circle-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"删除当前量测"));
+    deleteSelectedMeasurementAction_->setObjectName("deleteSelectedMeasurementAction");
+    connect(deleteSelectedMeasurementAction_, &QAction::triggered, this, [this]() {
+        const QString layerId = currentLayerId();
+        if (!layerId.isEmpty() && selectedMeasurementLayer_) {
+            emit removeLayerRequested(layerId);
+        }
+    });
+
+    measurementMenu->addSeparator();
+    clearAllMeasurementsAction_ = measurementMenu->addAction(
+        icons.icon("eraser-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"清空全部量测成果"));
+    clearAllMeasurementsAction_->setObjectName("clearAllMeasurementsAction");
+    connect(clearAllMeasurementsAction_, &QAction::triggered, this, &MainWindow::clearAllMeasurementsRequested);
+
     auto *toolBar = addToolBar(QString::fromUtf8(u8"工具"));
     toolBar->setMovable(false);
     toolBar->setIconSize(QSize(20, 20));
@@ -413,6 +442,9 @@ void MainWindow::refreshToolActionStates() {
     }
     if (exportMeasureAction_ != nullptr) {
         exportMeasureAction_->setEnabled(selectedMeasurementLayer_);
+    }
+    if (deleteSelectedMeasurementAction_ != nullptr) {
+        deleteSelectedMeasurementAction_->setEnabled(selectedMeasurementLayer_);
     }
     if (undoMeasureAction_ != nullptr) {
         undoMeasureAction_->setEnabled(measurementToolActive);

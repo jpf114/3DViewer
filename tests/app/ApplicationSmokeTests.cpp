@@ -76,16 +76,23 @@ int main(int argc, char **argv) {
     QObject::connect(&window, &MainWindow::exportSelectedMeasurementRequested, [&exportRequested]() {
         exportRequested = true;
     });
+    bool clearAllMeasurementsRequested = false;
+    QObject::connect(&window, &MainWindow::clearAllMeasurementsRequested, [&clearAllMeasurementsRequested]() {
+        clearAllMeasurementsRequested = true;
+    });
 
     auto *editAction = window.findChild<QAction *>("editMeasureAction");
     auto *exportAction = window.findChild<QAction *>("exportMeasureAction");
     auto *undoAction = window.findChild<QAction *>("undoMeasureAction");
     auto *clearAction = window.findChild<QAction *>("clearMeasureAction");
+    auto *deleteSelectedMeasurementAction = window.findChild<QAction *>("deleteSelectedMeasurementAction");
+    auto *clearAllMeasurementsAction = window.findChild<QAction *>("clearAllMeasurementsAction");
     auto *openProjectAction = window.findChild<QAction *>("openProjectAction");
     auto *saveProjectAction = window.findChild<QAction *>("saveProjectAction");
     auto *saveProjectAsAction = window.findChild<QAction *>("saveProjectAsAction");
     if (!require(editAction != nullptr && exportAction != nullptr &&
                      undoAction != nullptr && clearAction != nullptr &&
+                     deleteSelectedMeasurementAction != nullptr && clearAllMeasurementsAction != nullptr &&
                      openProjectAction != nullptr && saveProjectAction != nullptr &&
                      saveProjectAsAction != nullptr,
                  "measurement and project file actions should exist")) {
@@ -157,9 +164,21 @@ int main(int argc, char **argv) {
     if (!require(exportRequested, "export action should emit measurement export request")) {
         return EXIT_FAILURE;
     }
+    clearAllMeasurementsAction->trigger();
+    if (!require(clearAllMeasurementsRequested, "clear-all measurement action should emit request")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(deleteSelectedMeasurementAction->isEnabled(),
+                 "delete-selected measurement action should enable for measurement layer")) {
+        return EXIT_FAILURE;
+    }
     window.showLayerDetails(QString::fromUtf8(u8"经度：120.123456\n纬度：30.654321"));
     if (!require(!editAction->isEnabled() && !exportAction->isEnabled(),
                  "non-layer details should clear measurement actions")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!deleteSelectedMeasurementAction->isEnabled(),
+                 "delete-selected measurement action should clear with non-measurement selection")) {
         return EXIT_FAILURE;
     }
     auto *windowTextEdit = window.findChild<QTextEdit *>();
@@ -505,19 +524,47 @@ int main(int argc, char **argv) {
         removableMeasurement);
     auto *removeEditAction = removeWindow.findChild<QAction *>("editMeasureAction");
     auto *removeExportAction = removeWindow.findChild<QAction *>("exportMeasureAction");
+    auto *removeDeleteSelectedAction = removeWindow.findChild<QAction *>("deleteSelectedMeasurementAction");
     if (!require(removeEditAction != nullptr && removeExportAction != nullptr &&
+                     removeDeleteSelectedAction != nullptr &&
                      removeEditAction->isEnabled() && removeExportAction->isEnabled(),
                  "measurement actions should enable before removing selected layer")) {
         return EXIT_FAILURE;
     }
+    removeDeleteSelectedAction->trigger();
+    if (!require(removeLayerManager.layers().empty(), "delete-selected measurement action should remove selected layer")) {
+        return EXIT_FAILURE;
+    }
+    auto removableLayerSecond = std::make_shared<Layer>(
+        "measurement-remove-2",
+        QString::fromUtf8(u8"待删除量测2").toStdString(),
+        "memory://measurement-remove-2",
+        LayerKind::Measurement);
+    removableLayerSecond->setMeasurementData(removableMeasurement);
+    if (!require(removeLayerManager.addLayer(removableLayerSecond), "second removable measurement should be added")) {
+        return EXIT_FAILURE;
+    }
+    removeWindow.addLayerRow(*removableLayerSecond);
+    removeWindow.selectLayerRow(removableLayerSecond->id());
+    removeWindow.showLayerProperties(
+        QString::fromStdString(removableLayerSecond->id()),
+        QString::fromStdString(removableLayerSecond->name()),
+        QString::fromUtf8(u8"量测"),
+        QString::fromStdString(removableLayerSecond->sourceUri()),
+        true,
+        1.0,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        removableMeasurement);
     removeWindow.clearLayerSelection();
     if (!require(removeWindow.currentLayerId().isEmpty(),
                  "main window should clear selected layer id when selection is cleared")) {
         return EXIT_FAILURE;
     }
-    removeWindow.selectLayerRow(removableLayer->id());
+    removeWindow.selectLayerRow(removableLayerSecond->id());
 
-    removeController.removeLayer(removableLayer->id());
+    removeController.removeLayer(removableLayerSecond->id());
     if (!require(removeLayerManager.layers().empty(), "layer manager should remove selected layer")) {
         return EXIT_FAILURE;
     }
@@ -533,6 +580,51 @@ int main(int argc, char **argv) {
     if (!require(removeTextEdit != nullptr &&
                      removeTextEdit->toPlainText().contains(QString::fromUtf8(u8"未选择图层")),
                  "property dock should return to unselected placeholder after removing selected layer")) {
+        return EXIT_FAILURE;
+    }
+
+    MainWindow clearMeasurementsWindow;
+    LayerManager clearMeasurementsLayerManager;
+    DataImporter clearMeasurementsImporter;
+    ApplicationController clearMeasurementsController(
+        clearMeasurementsWindow,
+        clearMeasurementsWindow.globeWidget()->sceneController(),
+        clearMeasurementsLayerManager,
+        clearMeasurementsImporter);
+    auto *clearAllActionWindow = clearMeasurementsWindow.findChild<QAction *>("clearAllMeasurementsAction");
+    if (!require(clearAllActionWindow != nullptr, "clear-all measurements action should exist")) {
+        return EXIT_FAILURE;
+    }
+    auto vectorLayerForClear = std::make_shared<Layer>(
+        "vector-clear-1",
+        "Roads",
+        "memory://roads",
+        LayerKind::Vector);
+    auto measurementLayerForClearA = std::make_shared<Layer>(
+        "measurement-clear-a",
+        "Measure A",
+        "memory://measurement-clear-a",
+        LayerKind::Measurement);
+    measurementLayerForClearA->setMeasurementData(removableMeasurement);
+    auto measurementLayerForClearB = std::make_shared<Layer>(
+        "measurement-clear-b",
+        "Measure B",
+        "memory://measurement-clear-b",
+        LayerKind::Measurement);
+    measurementLayerForClearB->setMeasurementData(removableMeasurement);
+    if (!require(clearMeasurementsLayerManager.addLayer(vectorLayerForClear) &&
+                     clearMeasurementsLayerManager.addLayer(measurementLayerForClearA) &&
+                     clearMeasurementsLayerManager.addLayer(measurementLayerForClearB),
+                 "clear-all measurement fixtures should be added")) {
+        return EXIT_FAILURE;
+    }
+    clearMeasurementsWindow.addLayerRow(*vectorLayerForClear);
+    clearMeasurementsWindow.addLayerRow(*measurementLayerForClearA);
+    clearMeasurementsWindow.addLayerRow(*measurementLayerForClearB);
+    clearAllActionWindow->trigger();
+    if (!require(clearMeasurementsLayerManager.layers().size() == 1 &&
+                     clearMeasurementsLayerManager.layers().front()->id() == "vector-clear-1",
+                 "clear-all measurements action should preserve non-measurement layers")) {
         return EXIT_FAILURE;
     }
 

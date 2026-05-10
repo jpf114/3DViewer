@@ -64,6 +64,7 @@ signals:
     void undoMeasurementRequested();
     void editSelectedMeasurementRequested();
     void exportSelectedMeasurementRequested();
+    void clearAllMeasurementsRequested();
     void resetViewRequested();
     void zoomToLayerRequested(const QString &layerId);
     void screenshotRequested();
@@ -91,6 +92,8 @@ private:
     QAction *undoMeasureAction_;
     QAction *editMeasureAction_;
     QAction *exportMeasureAction_;
+    QAction *deleteSelectedMeasurementAction_;
+    QAction *clearAllMeasurementsAction_;
     QAction *homeAction_;
     QAction *screenshotAction_;
     QActionGroup *toolGroup_;

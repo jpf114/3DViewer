@@ -39,6 +39,7 @@ public:
     void saveProjectWithDialog();
     void saveProjectAsWithDialog();
     void openProjectWithDialog();
+    void clearAllMeasurements();
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
