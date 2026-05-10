@@ -46,6 +46,18 @@ int main(int argc, char **argv) {
     static_assert(std::is_base_of_v<QMainWindow, MainWindow>);
 
     MainWindow window;
+    bool openProjectRequested = false;
+    QObject::connect(&window, &MainWindow::openProjectRequested, [&openProjectRequested]() {
+        openProjectRequested = true;
+    });
+    bool saveProjectRequested = false;
+    QObject::connect(&window, &MainWindow::saveProjectRequested, [&saveProjectRequested]() {
+        saveProjectRequested = true;
+    });
+    bool saveProjectAsRequested = false;
+    QObject::connect(&window, &MainWindow::saveProjectAsRequested, [&saveProjectAsRequested]() {
+        saveProjectAsRequested = true;
+    });
     bool undoRequested = false;
     QObject::connect(&window, &MainWindow::undoMeasurementRequested, [&undoRequested]() {
         undoRequested = true;
@@ -69,9 +81,25 @@ int main(int argc, char **argv) {
     auto *exportAction = window.findChild<QAction *>("exportMeasureAction");
     auto *undoAction = window.findChild<QAction *>("undoMeasureAction");
     auto *clearAction = window.findChild<QAction *>("clearMeasureAction");
+    auto *openProjectAction = window.findChild<QAction *>("openProjectAction");
+    auto *saveProjectAction = window.findChild<QAction *>("saveProjectAction");
+    auto *saveProjectAsAction = window.findChild<QAction *>("saveProjectAsAction");
     if (!require(editAction != nullptr && exportAction != nullptr &&
-                     undoAction != nullptr && clearAction != nullptr,
-                 "measurement toolbar actions should exist")) {
+                     undoAction != nullptr && clearAction != nullptr &&
+                     openProjectAction != nullptr && saveProjectAction != nullptr &&
+                     saveProjectAsAction != nullptr,
+                 "measurement and project file actions should exist")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(saveProjectAction->shortcut() == QKeySequence(Qt::CTRL | Qt::Key_S),
+                 "save project should use Ctrl+S")) {
+        return EXIT_FAILURE;
+    }
+    openProjectAction->trigger();
+    saveProjectAction->trigger();
+    saveProjectAsAction->trigger();
+    if (!require(openProjectRequested && saveProjectRequested && saveProjectAsRequested,
+                 "project file actions should emit their signals")) {
         return EXIT_FAILURE;
     }
     if (!require(!editAction->isEnabled() && !exportAction->isEnabled() &&
@@ -597,6 +625,101 @@ int main(int argc, char **argv) {
     }
     if (!require(measurementTree->topLevelItem(0)->text(0).contains("2.500 km"),
                  "layer tree should refresh measurement summary after editing")) {
+        return EXIT_FAILURE;
+    }
+
+    QTemporaryDir projectDir;
+    if (!require(projectDir.isValid(), "project temp directory should be created")) {
+        return EXIT_FAILURE;
+    }
+
+    const QString projectVectorDir = projectDir.filePath("vector");
+    if (!require(QDir().mkpath(projectVectorDir), "project vector fixture directory should be created")) {
+        return EXIT_FAILURE;
+    }
+
+    QFile projectVectorFile(projectVectorDir + "/roads.geojson");
+    if (!require(projectVectorFile.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                 "project vector fixture should open for writing")) {
+        return EXIT_FAILURE;
+    }
+    projectVectorFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Road A"},"geometry":{"type":"Point","coordinates":[120.1,30.2]}}]})");
+    projectVectorFile.close();
+
+    MainWindow projectSaveWindow;
+    LayerManager projectSaveLayerManager;
+    DataImporter projectSaveImporter;
+    ApplicationController projectSaveController(
+        projectSaveWindow,
+        projectSaveWindow.globeWidget()->sceneController(),
+        projectSaveLayerManager,
+        projectSaveImporter);
+    projectSaveController.loadBasemapAndLayers(projectDir.path().toStdString());
+
+    const auto projectVectorLayer = projectSaveImporter.import(projectVectorFile.fileName().toStdString());
+    if (!require(projectVectorLayer != nullptr && projectSaveLayerManager.addLayer(projectVectorLayer),
+                 "project vector layer should be added before saving")) {
+        return EXIT_FAILURE;
+    }
+    projectVectorLayer->setVisible(false);
+    projectVectorLayer->setOpacity(0.4);
+    projectSaveWindow.addLayerRow(*projectVectorLayer);
+
+    const auto projectMeasurementLayer = std::make_shared<Layer>(
+        "measurement-project-1",
+        "Measure 1",
+        projectDir.filePath("measurement.geojson").toStdString(),
+        LayerKind::Measurement);
+    MeasurementLayerData projectMeasurementData;
+    projectMeasurementData.kind = MeasurementKind::Distance;
+    projectMeasurementData.points.push_back({120.0, 30.0});
+    projectMeasurementData.points.push_back({121.0, 31.0});
+    projectMeasurementData.lengthMeters = 1234.0;
+    projectMeasurementLayer->setMeasurementData(projectMeasurementData);
+    if (!require(projectSaveLayerManager.addLayer(projectMeasurementLayer),
+                 "project measurement layer should be added before saving")) {
+        return EXIT_FAILURE;
+    }
+    projectSaveWindow.addLayerRow(*projectMeasurementLayer);
+
+    const QString projectFilePath = projectDir.filePath("demo.3dproj");
+    if (!require(projectSaveController.saveProject(projectFilePath),
+                 "saveProject should persist current project state")) {
+        return EXIT_FAILURE;
+    }
+
+    MainWindow projectOpenWindow;
+    LayerManager projectOpenLayerManager;
+    DataImporter projectOpenImporter;
+    ApplicationController projectOpenController(
+        projectOpenWindow,
+        projectOpenWindow.globeWidget()->sceneController(),
+        projectOpenLayerManager,
+        projectOpenImporter);
+    projectOpenController.loadBasemapAndLayers(projectDir.path().toStdString());
+
+    if (!require(projectOpenController.openProject(projectFilePath),
+                 "openProject should restore current project state")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(projectOpenLayerManager.layers().size() == 2,
+                 "openProject should restore vector and measurement layers")) {
+        return EXIT_FAILURE;
+    }
+    const auto restoredVectorLayer = projectOpenLayerManager.findById(projectVectorLayer->id());
+    if (!require(restoredVectorLayer != nullptr &&
+                     restoredVectorLayer->sourceUri() == projectVectorFile.fileName().toStdString() &&
+                     !restoredVectorLayer->visible() &&
+                     std::abs(restoredVectorLayer->opacity() - 0.4) <= 1.0e-6,
+                 "openProject should restore vector layer state")) {
+        return EXIT_FAILURE;
+    }
+    const auto restoredMeasurementLayer = projectOpenLayerManager.findById("measurement-project-1");
+    if (!require(restoredMeasurementLayer != nullptr &&
+                     restoredMeasurementLayer->measurementData().has_value() &&
+                     restoredMeasurementLayer->measurementData()->points.size() == 2 &&
+                     std::abs(restoredMeasurementLayer->measurementData()->lengthMeters - 1234.0) <= 1.0e-6,
+                 "openProject should restore measurement data")) {
         return EXIT_FAILURE;
     }
 

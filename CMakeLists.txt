@@ -28,9 +28,29 @@ if(NOT CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
 endif()
 
+set(THREEDVIEWER_OSGEARTH_DIR "" CACHE PATH "Directory containing osgEarthConfig.cmake")
+if(NOT THREEDVIEWER_OSGEARTH_DIR AND DEFINED ENV{OSGEARTH_DIR})
+    set(THREEDVIEWER_OSGEARTH_DIR "$ENV{OSGEARTH_DIR}" CACHE PATH
+        "Directory containing osgEarthConfig.cmake" FORCE)
+endif()
+if(THREEDVIEWER_OSGEARTH_DIR AND NOT DEFINED osgEarth_DIR)
+    set(osgEarth_DIR "${THREEDVIEWER_OSGEARTH_DIR}" CACHE PATH "Directory containing osgEarthConfig.cmake")
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Svg)
 find_package(OpenSceneGraph REQUIRED COMPONENTS osg osgDB osgGA osgUtil osgViewer)
-find_package(osgEarth CONFIG REQUIRED)
+find_package(osgEarth CONFIG QUIET)
+if(NOT osgEarth_FOUND)
+    message(FATAL_ERROR
+        "osgEarth package was not found.\n"
+        "Expected one of: osgEarthConfig.cmake, osgearth-config.cmake.\n"
+        "What to check:\n"
+        "  1. Install or build osgEarth for the same MSVC toolchain and architecture as this project.\n"
+        "  2. Set THREEDVIEWER_OSGEARTH_DIR or osgEarth_DIR to the directory containing osgEarthConfig.cmake.\n"
+        "  3. If you rely on environment variables, set OSGEARTH_DIR before running CMake.\n"
+        "  4. Review docs/setup/windows-development-environment.md for the recommended Windows layout.\n"
+    )
+endif()
 find_package(GDAL CONFIG REQUIRED)
 find_package(PROJ CONFIG REQUIRED)
 find_package(GEOS CONFIG REQUIRED)
@@ -46,11 +66,13 @@ add_executable(ThreeDViewer
     src/app/ApplicationController.cpp
     src/app/MainWindow.cpp
     src/app/ScreenshotSave.cpp
+    src/common/GdalRuntime.cpp
     src/common/Logging.cpp
     src/data/DataImporter.cpp
     src/data/GdalDatasetInspector.cpp
     src/data/LayerConfig.cpp
     src/data/MapConfig.cpp
+    src/data/ProjectConfig.cpp
     src/data/VectorFeatureQuery.cpp
     src/globe/GlobeWidget.cpp
     src/globe/SceneController.cpp

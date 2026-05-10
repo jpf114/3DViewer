@@ -109,6 +109,26 @@ MainWindow::MainWindow(QWidget *parent)
     const QColor toolColor("#4F637A");
 
     auto *fileMenu = menuBar()->addMenu(QString::fromUtf8(u8"文件(&F)"));
+    auto *openProjectAction = fileMenu->addAction(
+        icons.icon("folder-open-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"打开工程..."));
+    openProjectAction->setObjectName("openProjectAction");
+    connect(openProjectAction, &QAction::triggered, this, &MainWindow::openProjectRequested);
+
+    auto *saveProjectAction = fileMenu->addAction(
+        icons.icon("floppy-disk-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"保存工程"));
+    saveProjectAction->setObjectName("saveProjectAction");
+    saveProjectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    connect(saveProjectAction, &QAction::triggered, this, &MainWindow::saveProjectRequested);
+
+    auto *saveProjectAsAction = fileMenu->addAction(
+        icons.icon("floppy-disk-back-regular.svg", 16, toolColor),
+        QString::fromUtf8(u8"工程另存为..."));
+    saveProjectAsAction->setObjectName("saveProjectAsAction");
+    connect(saveProjectAsAction, &QAction::triggered, this, &MainWindow::saveProjectAsRequested);
+
+    fileMenu->addSeparator();
     auto *importAction = fileMenu->addAction(
         icons.icon("cloud-arrow-up-regular.svg", 16, toolColor),
         QString::fromUtf8(u8"导入数据..."));

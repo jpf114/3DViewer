@@ -2,70 +2,18 @@
 
 #include <algorithm>
 #include <cmath>
-#include <filesystem>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <string>
-
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#endif
 
 #include <cpl_conv.h>
 #include <gdal_priv.h>
 #include <ogr_spatialref.h>
 #include <ogrsf_frmts.h>
 
+#include "common/GdalRuntime.h"
+
 namespace {
-
-void configureRuntimeDataPaths() {
-#if defined(_WIN32)
-    if (CPLGetConfigOption("GDAL_DATA", nullptr) != nullptr &&
-        CPLGetConfigOption("PROJ_DATA", nullptr) != nullptr &&
-        CPLGetConfigOption("PROJ_LIB", nullptr) != nullptr) {
-        return;
-    }
-
-    wchar_t modulePath[MAX_PATH];
-    const DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH) {
-        return;
-    }
-
-    const std::filesystem::path exeDir = std::filesystem::path(modulePath).parent_path();
-    const std::filesystem::path shareDir = exeDir / "share";
-    const std::filesystem::path gdalDir = shareDir / "gdal";
-    const std::filesystem::path projDir = shareDir / "proj";
-
-    if (CPLGetConfigOption("GDAL_DATA", nullptr) == nullptr && std::filesystem::exists(gdalDir)) {
-        const std::string path = gdalDir.string();
-        CPLSetConfigOption("GDAL_DATA", path.c_str());
-    }
-
-    if (std::filesystem::exists(projDir)) {
-        const std::string path = projDir.string();
-        if (CPLGetConfigOption("PROJ_DATA", nullptr) == nullptr) {
-            CPLSetConfigOption("PROJ_DATA", path.c_str());
-        }
-        if (CPLGetConfigOption("PROJ_LIB", nullptr) == nullptr) {
-            CPLSetConfigOption("PROJ_LIB", path.c_str());
-        }
-    }
-#endif
-}
-
-void ensureGdalRegistered() {
-    static std::once_flag once;
-    std::call_once(once, []() {
-        configureRuntimeDataPaths();
-        GDALAllRegister();
-    });
-    CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
-    CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
-}
 
 double layerTolerance(const OGREnvelope &env) {
     const double width = std::abs(env.MaxX - env.MinX);
@@ -153,7 +101,7 @@ std::optional<double> geometryHitDistance(const OGRGeometry &geometry, const OGR
 std::optional<VectorFeatureHit> queryVectorFeatureAt(const std::string &path,
                                                      double longitude,
                                                      double latitude) {
-    ensureGdalRegistered();
+    gdalruntime::ensureGdalRegistered();
 
     DatasetPtr dataset(
         static_cast<GDALDataset *>(GDALOpenEx(path.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR, nullptr, nullptr, nullptr)));

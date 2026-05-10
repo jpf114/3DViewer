@@ -8,6 +8,7 @@
 
 #include <QImage>
 
+#include "data/ProjectConfig.h"
 #include "layers/MeasurementLayerData.h"
 #include "layers/GeographicBounds.h"
 #include "layers/Layer.h"
@@ -52,6 +53,10 @@ public:
     void clearMeasurementDraft();
     QImage captureImage();
     void setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir);
+    void setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir, const std::string &preferredBasemapId);
+    std::string currentBasemapId() const;
+    std::optional<ProjectCameraState> currentCameraState() const;
+    void applyCameraState(const ProjectCameraState &state, double durationSeconds = 0.0);
 
 private:
     void flushPendingLayers();

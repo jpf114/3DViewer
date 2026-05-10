@@ -3,10 +3,12 @@ add_executable(ApplicationSmokeTests
     ../src/app/ApplicationController.cpp
     ../src/app/MainWindow.cpp
     ../src/app/ScreenshotSave.cpp
+    ../src/common/GdalRuntime.cpp
     ../src/data/DataImporter.cpp
     ../src/data/GdalDatasetInspector.cpp
     ../src/data/LayerConfig.cpp
     ../src/data/MapConfig.cpp
+    ../src/data/ProjectConfig.cpp
     ../src/globe/GlobeWidget.cpp
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
@@ -40,6 +42,7 @@ add_test(NAME ScreenshotSaveTests COMMAND $<TARGET_FILE:ScreenshotSaveTests>)
 
 add_executable(SceneControllerTests
     globe/SceneControllerTests.cpp
+    ../src/common/GdalRuntime.cpp
     ../src/globe/SceneController.cpp
     ../src/data/VectorFeatureQuery.cpp
     ../src/layers/Layer.cpp
@@ -81,6 +84,7 @@ add_test(NAME LayerManagerTests COMMAND LayerManagerTests)
 
 add_executable(GdalDatasetInspectorTests
     data/GdalDatasetInspectorTests.cpp
+    ../src/common/GdalRuntime.cpp
     ../src/data/GdalDatasetInspector.cpp
 )
 
@@ -90,6 +94,18 @@ target_link_libraries(GdalDatasetInspectorTests PRIVATE GDAL::GDAL spdlog::spdlo
 threeviewer_runtime_post_build(GdalDatasetInspectorTests)
 
 add_test(NAME GdalDatasetInspectorTests COMMAND GdalDatasetInspectorTests)
+
+add_executable(GdalRuntimeTests
+    common/GdalRuntimeTests.cpp
+    ../src/common/GdalRuntime.cpp
+)
+
+target_compile_options(GdalRuntimeTests PRIVATE /utf-8)
+target_include_directories(GdalRuntimeTests PRIVATE ../src)
+target_link_libraries(GdalRuntimeTests PRIVATE GDAL::GDAL)
+threeviewer_runtime_post_build(GdalRuntimeTests)
+
+add_test(NAME GdalRuntimeTests COMMAND GdalRuntimeTests)
 
 add_executable(MapConfigTests
     data/MapConfigTests.cpp
@@ -113,8 +129,20 @@ target_link_libraries(LayerConfigTests PRIVATE Qt6::Core spdlog::spdlog)
 
 add_test(NAME LayerConfigTests COMMAND LayerConfigTests)
 
+add_executable(ProjectConfigTests
+    data/ProjectConfigTests.cpp
+    ../src/data/ProjectConfig.cpp
+)
+
+target_compile_options(ProjectConfigTests PRIVATE /utf-8)
+target_include_directories(ProjectConfigTests PRIVATE ../src)
+target_link_libraries(ProjectConfigTests PRIVATE Qt6::Core spdlog::spdlog)
+
+add_test(NAME ProjectConfigTests COMMAND ProjectConfigTests)
+
 add_executable(DataImporterTests
     data/DataImporterTests.cpp
+    ../src/common/GdalRuntime.cpp
     ../src/data/GdalDatasetInspector.cpp
     ../src/data/DataImporter.cpp
     ../src/layers/Layer.cpp
@@ -129,6 +157,7 @@ add_test(NAME DataImporterTests COMMAND DataImporterTests)
 
 add_executable(VectorFeatureQueryTests
     data/VectorFeatureQueryTests.cpp
+    ../src/common/GdalRuntime.cpp
     ../src/data/VectorFeatureQuery.cpp
 )
 

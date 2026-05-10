@@ -22,6 +22,7 @@
 #include "data/DataImporter.h"
 #include "data/LayerConfig.h"
 #include "data/MapConfig.h"
+#include "data/ProjectConfig.h"
 #include "globe/GlobeWidget.h"
 #include "globe/SceneController.h"
 #include "layers/Layer.h"
@@ -106,6 +107,59 @@ std::optional<LayerKind> parseLayerKind(const std::string &kind) {
     if (kind == "chart") return LayerKind::Chart;
     if (kind == "scientific") return LayerKind::Scientific;
     return std::nullopt;
+}
+
+std::string serializeLayerKind(LayerKind kind) {
+    switch (kind) {
+    case LayerKind::Imagery: return "imagery";
+    case LayerKind::Elevation: return "elevation";
+    case LayerKind::Vector: return "vector";
+    case LayerKind::Measurement: return "measurement";
+    case LayerKind::Model: return "model";
+    case LayerKind::Chart: return "chart";
+    case LayerKind::Scientific: return "scientific";
+    }
+
+    return "unknown";
+}
+
+ProjectMeasurementData toProjectMeasurementData(const MeasurementLayerData &data) {
+    ProjectMeasurementData measurementData;
+    measurementData.kind = data.kind == MeasurementKind::Area ? "area" : "distance";
+    measurementData.lengthMeters = data.lengthMeters;
+    measurementData.areaSquareMeters = data.areaSquareMeters;
+    measurementData.points.reserve(data.points.size());
+    for (const auto &point : data.points) {
+        measurementData.points.push_back(ProjectMeasurementPoint{point.longitude, point.latitude});
+    }
+    return measurementData;
+}
+
+MeasurementLayerData toMeasurementLayerData(const ProjectMeasurementData &data) {
+    MeasurementLayerData measurementData;
+    measurementData.kind = data.kind == "area" ? MeasurementKind::Area : MeasurementKind::Distance;
+    measurementData.lengthMeters = data.lengthMeters;
+    measurementData.areaSquareMeters = data.areaSquareMeters;
+    measurementData.points.reserve(data.points.size());
+    for (const auto &point : data.points) {
+        measurementData.points.push_back(globe::MeasurementPoint{point.longitude, point.latitude});
+    }
+    return measurementData;
+}
+
+std::string resolveProjectPath(const QString &projectPath, const std::string &storedPath) {
+    if (storedPath.empty()) {
+        return {};
+    }
+
+    const QString qStoredPath = QString::fromStdString(storedPath);
+    const QFileInfo storedInfo(qStoredPath);
+    if (storedInfo.isAbsolute()) {
+        return QDir::cleanPath(qStoredPath).toStdString();
+    }
+
+    const QFileInfo projectInfo(projectPath);
+    return QDir::cleanPath(projectInfo.dir().filePath(qStoredPath)).toStdString();
 }
 
 QString measurementLayerBaseName(MeasurementKind kind) {
@@ -335,6 +389,18 @@ ApplicationController::ApplicationController(MainWindow &window,
 
     QObject::connect(&window_, &MainWindow::screenshotRequested, [this]() {
         captureScreenshot();
+    });
+
+    QObject::connect(&window_, &MainWindow::openProjectRequested, [this]() {
+        openProjectWithDialog();
+    });
+
+    QObject::connect(&window_, &MainWindow::saveProjectRequested, [this]() {
+        saveProjectWithDialog();
+    });
+
+    QObject::connect(&window_, &MainWindow::saveProjectAsRequested, [this]() {
+        saveProjectAsWithDialog();
     });
 
     QObject::connect(window_.globeWidget(), &GlobeWidget::terrainPickCompleted, [this](const PickResult &pick) {
@@ -791,6 +857,7 @@ void ApplicationController::addToRecentFiles(const QString &path) {
 }
 
 void ApplicationController::loadBasemapAndLayers(const std::string &resourceDir) {
+    resourceDir_ = resourceDir;
     auto basemapConfig = loadBasemapConfig(resourceDir);
     if (basemapConfig.has_value()) {
         sceneController_.setBasemapConfig(*basemapConfig, resourceDir);
@@ -919,4 +986,207 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
     }
 
     saveLayerConfig(resourceDir, config);
+}
+
+bool ApplicationController::saveProject(const QString &path) {
+    ProjectConfig config;
+    config.version = 1;
+    config.basemapId = sceneController_.currentBasemapId();
+    config.cameraState = sceneController_.currentCameraState();
+
+    for (const auto &layer : layerManager_.layers()) {
+        if (!layer) {
+            continue;
+        }
+
+        ProjectLayerEntry entry;
+        entry.id = layer->id();
+        entry.name = layer->name();
+        entry.kind = serializeLayerKind(layer->kind());
+        entry.visible = layer->visible();
+        entry.opacity = layer->opacity();
+
+        if (layer->kind() != LayerKind::Measurement) {
+            entry.path = layer->sourceUri();
+        }
+
+        if (layer->kind() == LayerKind::Imagery) {
+            const auto rm = layer->rasterMetadata();
+            if (rm.has_value() && rm->bandCount >= 2) {
+                entry.bandMapping = BandMappingEntry{layer->redBand(), layer->greenBand(), layer->blueBand()};
+            }
+        }
+
+        if (layer->kind() == LayerKind::Model) {
+            const auto placement = layer->modelPlacement();
+            if (placement.has_value()) {
+                entry.modelPlacement = ModelPlacementEntry{
+                    placement->longitude,
+                    placement->latitude,
+                    placement->height,
+                    placement->scale,
+                    placement->heading
+                };
+            }
+        }
+
+        if (layer->kind() == LayerKind::Measurement) {
+            const auto measurementData = layer->measurementData();
+            if (measurementData.has_value()) {
+                entry.measurementData = toProjectMeasurementData(*measurementData);
+            }
+        }
+
+        config.layers.push_back(entry);
+    }
+
+    if (!saveProjectConfig(path, config)) {
+        return false;
+    }
+
+    currentProjectPath_ = path;
+    return true;
+}
+
+bool ApplicationController::openProject(const QString &path) {
+    const auto projectConfig = loadProjectConfig(path);
+    if (!projectConfig.has_value()) {
+        return false;
+    }
+
+    clearCurrentProject();
+
+    if (!resourceDir_.empty()) {
+        auto basemapConfig = loadBasemapConfig(resourceDir_);
+        if (basemapConfig.has_value()) {
+            sceneController_.setBasemapConfig(*basemapConfig, resourceDir_, projectConfig->basemapId);
+        }
+    }
+
+    for (const auto &entry : projectConfig->layers) {
+        const auto kind = parseLayerKind(entry.kind);
+        if (!kind.has_value()) {
+            continue;
+        }
+
+        std::shared_ptr<Layer> layer;
+        if (*kind == LayerKind::Measurement && entry.measurementData.has_value()) {
+            const MeasurementLayerData measurementData = toMeasurementLayerData(*entry.measurementData);
+            layer = std::make_shared<Layer>(
+                entry.id,
+                entry.name,
+                measurementTempPath(QString::fromStdString(entry.id)).toStdString(),
+                LayerKind::Measurement);
+            if (!writeMeasurementGeoJson(QString::fromStdString(layer->sourceUri()), measurementData)) {
+                continue;
+            }
+            layer->setMeasurementData(measurementData);
+            if (const auto bounds = measurementBounds(measurementData); bounds.has_value()) {
+                layer->setGeographicBounds(*bounds);
+            }
+        } else {
+            const std::string resolvedPath = resolveProjectPath(path, entry.path);
+            layer = importer_.import(resolvedPath);
+            if (!layer) {
+                continue;
+            }
+            layer->setId(entry.id);
+            layer->setName(entry.name);
+        }
+
+        layer->setVisible(entry.visible);
+        layer->setOpacity(entry.opacity);
+
+        if (entry.bandMapping.has_value() && layer->kind() == LayerKind::Imagery) {
+            layer->setBandMapping(entry.bandMapping->red, entry.bandMapping->green, entry.bandMapping->blue);
+        }
+
+        if (entry.modelPlacement.has_value() && layer->kind() == LayerKind::Model) {
+            ModelPlacement placement;
+            placement.longitude = entry.modelPlacement->longitude;
+            placement.latitude = entry.modelPlacement->latitude;
+            placement.height = entry.modelPlacement->height;
+            placement.scale = entry.modelPlacement->scale;
+            placement.heading = entry.modelPlacement->heading;
+            layer->setModelPlacement(placement);
+        }
+
+        if (!layerManager_.addLayer(layer)) {
+            continue;
+        }
+
+        sceneController_.addLayer(layer);
+        window_.addLayerRow(*layer);
+    }
+
+    if (projectConfig->cameraState.has_value()) {
+        sceneController_.applyCameraState(*projectConfig->cameraState);
+    }
+
+    currentProjectPath_ = path;
+    return true;
+}
+
+void ApplicationController::saveProjectWithDialog() {
+    if (!currentProjectPath_.isEmpty()) {
+        if (saveProject(currentProjectPath_)) {
+            window_.statusBar()->showMessage(QString::fromUtf8(u8"工程已保存。"), 3000);
+        }
+        return;
+    }
+
+    saveProjectAsWithDialog();
+}
+
+void ApplicationController::saveProjectAsWithDialog() {
+    const QString defaultPath = currentProjectPath_.isEmpty()
+        ? QDir::home().filePath(QString::fromUtf8(u8"未命名工程.3dproj"))
+        : currentProjectPath_;
+    const QString path = QFileDialog::getSaveFileName(
+        &window_,
+        QString::fromUtf8(u8"保存工程"),
+        defaultPath,
+        QString::fromUtf8(u8"3DViewer 工程 (*.3dproj)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    QString normalizedPath = path;
+    if (!normalizedPath.endsWith(".3dproj", Qt::CaseInsensitive)) {
+        normalizedPath += ".3dproj";
+    }
+
+    if (saveProject(normalizedPath)) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"工程已保存。"), 3000);
+    }
+}
+
+void ApplicationController::openProjectWithDialog() {
+    const QString path = QFileDialog::getOpenFileName(
+        &window_,
+        QString::fromUtf8(u8"打开工程"),
+        currentProjectPath_.isEmpty() ? QDir::homePath() : QFileInfo(currentProjectPath_).absolutePath(),
+        QString::fromUtf8(u8"3DViewer 工程 (*.3dproj)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    if (openProject(path)) {
+        window_.statusBar()->showMessage(QString::fromUtf8(u8"工程已打开。"), 3000);
+    }
+}
+
+void ApplicationController::clearCurrentProject() {
+    const auto layers = layerManager_.layers();
+    std::vector<std::string> ids;
+    ids.reserve(layers.size());
+    for (const auto &layer : layers) {
+        if (layer) {
+            ids.push_back(layer->id());
+        }
+    }
+
+    for (const auto &id : ids) {
+        removeLayer(id);
+    }
 }

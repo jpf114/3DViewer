@@ -84,6 +84,7 @@ using namespace Qt::Literals::StringLiterals;
 struct SceneController::Impl {
     bool initialized = false;
     HWND hwnd = nullptr;
+    std::string currentBasemapId;
     std::unordered_map<std::string, std::shared_ptr<Layer>> appLayers;
     std::unordered_map<std::string, osg::ref_ptr<osgEarth::Layer>> renderLayers;
     std::unordered_map<std::string, osg::ref_ptr<osg::Node>> renderModelNodes;
@@ -1278,19 +1279,105 @@ QImage SceneController::captureImage() {
 }
 
 void SceneController::setBasemapConfig(const BasemapConfig &config, const std::string &resourceDir) {
-    for (const auto &entry : config.basemaps) {
-        if (!entry.enabled) continue;
+    setBasemapConfig(config, resourceDir, {});
+}
 
+void SceneController::setBasemapConfig(const BasemapConfig &config,
+                                       const std::string &resourceDir,
+                                       const std::string &preferredBasemapId) {
+    const auto trySelectEntry = [this, &resourceDir](const BasemapEntry &entry) -> bool {
         spdlog::info("SceneController: trying basemap '{}' type={}", entry.id, static_cast<int>(entry.type));
         auto layer = createBaseLayerFromConfig(entry, resourceDir);
-        if (layer) {
-            impl_->baseLayer = layer;
-            spdlog::info("SceneController: basemap '{}' selected", entry.id);
+        if (!layer) {
+            return false;
+        }
+
+        impl_->baseLayer = layer;
+        impl_->currentBasemapId = entry.id;
+        spdlog::info("SceneController: basemap '{}' selected", entry.id);
+        return true;
+    };
+
+    if (!preferredBasemapId.empty()) {
+        for (const auto &entry : config.basemaps) {
+            if (entry.id == preferredBasemapId && entry.enabled && trySelectEntry(entry)) {
+                return;
+            }
+        }
+    }
+
+    for (const auto &entry : config.basemaps) {
+        if (!entry.enabled) {
+            continue;
+        }
+        if (trySelectEntry(entry)) {
             return;
         }
     }
 
     spdlog::info("SceneController: no enabled basemap found, using fallback");
     impl_->baseLayer = createFallbackBaseLayer(resourceDir);
+    impl_->currentBasemapId.clear();
+}
+
+std::string SceneController::currentBasemapId() const {
+    return impl_->currentBasemapId;
+}
+
+std::optional<ProjectCameraState> SceneController::currentCameraState() const {
+    if (!impl_->viewer) {
+        return std::nullopt;
+    }
+
+    auto *em = dynamic_cast<osgEarth::EarthManipulator *>(impl_->viewer->getCameraManipulator());
+    if (em == nullptr) {
+        return std::nullopt;
+    }
+
+    const osgEarth::Viewpoint viewpoint = em->getViewpoint();
+    if (!viewpoint.isValid() || !viewpoint.focalPoint().isSet()) {
+        return std::nullopt;
+    }
+
+    osgEarth::GeoPoint focalPoint = viewpoint.focalPoint().value();
+    if (!focalPoint.makeGeographic()) {
+        return std::nullopt;
+    }
+
+    ProjectCameraState state;
+    state.longitude = focalPoint.x();
+    state.latitude = focalPoint.y();
+    state.altitude = focalPoint.z();
+    if (viewpoint.heading().isSet()) {
+        state.heading = viewpoint.heading()->as(osgEarth::Units::DEGREES);
+    }
+    if (viewpoint.pitch().isSet()) {
+        state.pitch = viewpoint.pitch()->as(osgEarth::Units::DEGREES);
+    }
+    if (viewpoint.range().isSet()) {
+        state.range = viewpoint.range()->as(osgEarth::Units::METERS);
+    }
+    return state;
+}
+
+void SceneController::applyCameraState(const ProjectCameraState &state, double durationSeconds) {
+    if (!impl_->viewer) {
+        return;
+    }
+
+    auto *em = dynamic_cast<osgEarth::EarthManipulator *>(impl_->viewer->getCameraManipulator());
+    if (em == nullptr) {
+        return;
+    }
+
+    osgEarth::Viewpoint viewpoint(
+        "project",
+        state.longitude,
+        state.latitude,
+        state.altitude,
+        state.heading,
+        state.pitch,
+        state.range);
+    em->setViewpoint(viewpoint, durationSeconds);
 }
 

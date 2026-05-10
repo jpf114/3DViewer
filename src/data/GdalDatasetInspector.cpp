@@ -2,96 +2,19 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <limits>
-#include <mutex>
 #include <spdlog/spdlog.h>
-
-#if defined(Q_OS_WIN)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#endif
 
 #include <gdal_priv.h>
 #include <cpl_conv.h>
 #include <ogr_spatialref.h>
 #include <ogrsf_frmts.h>
 
+#include "common/GdalRuntime.h"
+
 namespace {
-
-void appendModuleShareRoot(std::vector<std::filesystem::path> &candidateRoots, const wchar_t *moduleName) {
-#if defined(Q_OS_WIN)
-    if (HMODULE module = GetModuleHandleW(moduleName)) {
-        wchar_t modulePath[MAX_PATH];
-        const DWORD length = GetModuleFileNameW(module, modulePath, MAX_PATH);
-        if (length > 0 && length < MAX_PATH) {
-            candidateRoots.push_back(std::filesystem::path(modulePath).parent_path().parent_path() / "share");
-        }
-    }
-#else
-    (void)candidateRoots;
-    (void)moduleName;
-#endif
-}
-
-void configureRuntimeDataPaths() {
-#if defined(Q_OS_WIN)
-    if (CPLGetConfigOption("GDAL_DATA", nullptr) != nullptr &&
-        (CPLGetConfigOption("PROJ_DATA", nullptr) != nullptr ||
-         CPLGetConfigOption("PROJ_LIB", nullptr) != nullptr)) {
-        return;
-    }
-
-    std::vector<std::filesystem::path> candidateRoots;
-    wchar_t modulePath[MAX_PATH];
-    const DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
-    if (length > 0 && length < MAX_PATH) {
-        candidateRoots.push_back(std::filesystem::path(modulePath).parent_path() / "share");
-    }
-
-    appendModuleShareRoot(candidateRoots, L"gdal.dll");
-    appendModuleShareRoot(candidateRoots, L"gdald.dll");
-    appendModuleShareRoot(candidateRoots, L"proj_9.dll");
-    appendModuleShareRoot(candidateRoots, L"proj_9_d.dll");
-
-    if (const char *vcpkgRoot = std::getenv("VCPKG_ROOT")) {
-        candidateRoots.emplace_back(std::filesystem::path(vcpkgRoot) / "installed" / "x64-windows" / "share");
-    }
-
-    for (const auto &shareDir : candidateRoots) {
-        const std::filesystem::path gdalDir = shareDir / "gdal";
-        const std::filesystem::path projDir = shareDir / "proj";
-
-        if (CPLGetConfigOption("GDAL_DATA", nullptr) == nullptr && std::filesystem::exists(gdalDir)) {
-            const std::string path = gdalDir.string();
-            CPLSetConfigOption("GDAL_DATA", path.c_str());
-        }
-
-        if (std::filesystem::exists(projDir)) {
-            const std::string path = projDir.string();
-            if (CPLGetConfigOption("PROJ_DATA", nullptr) == nullptr) {
-                CPLSetConfigOption("PROJ_DATA", path.c_str());
-            }
-            if (CPLGetConfigOption("PROJ_LIB", nullptr) == nullptr) {
-                CPLSetConfigOption("PROJ_LIB", path.c_str());
-            }
-        }
-    }
-#endif
-}
-
-void ensureGdalRegistered() {
-    static std::once_flag once;
-    std::call_once(once, []() {
-        configureRuntimeDataPaths();
-        GDALAllRegister();
-    });
-    CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
-    CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
-}
 
 std::string stemOrFilename(const std::string &path) {
 #if defined(Q_OS_WIN)
@@ -433,7 +356,7 @@ VectorLayerInfo collectVectorMetadata(GDALDataset &ds) {
 }
 
 std::optional<DataSourceDescriptor> GdalDatasetInspector::inspect(const std::string &path) const {
-    ensureGdalRegistered();
+    gdalruntime::ensureGdalRegistered();
 
     spdlog::info("GdalDatasetInspector: inspecting '{}' GDAL_FILENAME_IS_UTF8={}", path,
                  CPLGetConfigOption("GDAL_FILENAME_IS_UTF8", "(unset)"));

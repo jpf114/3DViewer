@@ -33,6 +33,11 @@ public:
     void captureScreenshot();
     void loadBasemapAndLayers(const std::string &resourceDir);
     void saveLayerConfigOnExit(const std::string &resourceDir);
+    bool saveProject(const QString &path);
+    bool openProject(const QString &path);
+    void saveProjectWithDialog();
+    void saveProjectAsWithDialog();
+    void openProjectWithDialog();
 
 private:
     void applyLayerOrderFromUi(const QStringList &orderedIds);
@@ -42,9 +47,12 @@ private:
     void addMeasurementLayer(const MeasurementLayerData &data);
     void editSelectedMeasurement();
     void exportSelectedMeasurement();
+    void clearCurrentProject();
 
     MainWindow &window_;
     SceneController &sceneController_;
     LayerManager &layerManager_;
     DataImporter &importer_;
+    std::string resourceDir_;
+    QString currentProjectPath_;
 };
