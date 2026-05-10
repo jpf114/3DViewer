@@ -1,8 +1,10 @@
 #include "ui/MeasurementResultsDock.h"
 
 #include <QAction>
+#include <QComboBox>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QSignalBlocker>
 #include <QTableWidget>
@@ -28,6 +30,8 @@ QString measurementKindText(MeasurementKind kind) {
 
 MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     : QDockWidget(QString::fromUtf8(u8"量测成果"), parent),
+      filterEdit_(new QLineEdit(this)),
+      sortCombo_(new QComboBox(this)),
       emptyStateLabel_(new QLabel(this)),
       table_(new QTableWidget(this)),
       zoomAction_(nullptr),
@@ -47,6 +51,21 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     auto *toolbar = new QToolBar(container);
     toolbar->setMovable(false);
     toolbar->setIconSize(QSize(16, 16));
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+
+    filterEdit_->setObjectName("measurementResultsFilterEdit");
+    filterEdit_->setPlaceholderText(QString::fromUtf8(u8"筛选名称、类型或摘要"));
+    filterEdit_->setClearButtonEnabled(true);
+    filterEdit_->setMaximumWidth(220);
+    toolbar->addWidget(filterEdit_);
+
+    sortCombo_->setObjectName("measurementResultsSortCombo");
+    sortCombo_->addItem(QString::fromUtf8(u8"按名称"));
+    sortCombo_->addItem(QString::fromUtf8(u8"按类型"));
+    sortCombo_->addItem(QString::fromUtf8(u8"按摘要"));
+    toolbar->addWidget(sortCombo_);
+
+    toolbar->addSeparator();
 
     zoomAction_ = toolbar->addAction(
         icons.icon("magnifying-glass-plus-regular.svg", 16, toolColor),
@@ -100,6 +119,12 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this]() {
         updateActionStates();
         emit currentResultChanged(currentResultId());
+    });
+    connect(filterEdit_, &QLineEdit::textChanged, this, [this]() {
+        applyFilterAndSort();
+    });
+    connect(sortCombo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        applyFilterAndSort();
     });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem *item) {
         if (item == nullptr) {
@@ -190,6 +215,7 @@ void MeasurementResultsDock::addOrUpdateResult(const MeasurementResultItemData &
     table_->item(row, 0)->setData(kLayerIdRole, item.layerId);
     table_->item(row, 1)->setText(measurementKindText(item.kind));
     table_->item(row, 2)->setText(item.summary);
+    applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
 }
@@ -199,12 +225,14 @@ void MeasurementResultsDock::removeResult(const QString &layerId) {
     if (row >= 0) {
         table_->removeRow(row);
     }
+    applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
 }
 
 void MeasurementResultsDock::clearResults() {
     table_->setRowCount(0);
+    applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
 }
@@ -279,11 +307,46 @@ void MeasurementResultsDock::updateActionStates() {
 }
 
 void MeasurementResultsDock::updateEmptyState() {
-    const bool empty = table_->rowCount() == 0;
+    bool hasVisibleRows = false;
+    for (int row = 0; row < table_->rowCount(); ++row) {
+        if (!table_->isRowHidden(row)) {
+            hasVisibleRows = true;
+            break;
+        }
+    }
+
+    const bool empty = !hasVisibleRows;
     if (emptyStateLabel_ != nullptr) {
+        emptyStateLabel_->setText(table_->rowCount() == 0
+            ? QString::fromUtf8(u8"暂无量测成果。\n开始测距或测面后，结果会显示在这里。")
+            : QString::fromUtf8(u8"没有符合当前筛选条件的量测成果。"));
         emptyStateLabel_->setVisible(empty);
     }
     if (table_ != nullptr) {
-        table_->setVisible(!empty);
+        table_->setVisible(table_->rowCount() > 0);
     }
+}
+
+void MeasurementResultsDock::applyFilterAndSort() {
+    const QString filterText = filterEdit_ != nullptr ? filterEdit_->text().trimmed() : QString();
+    for (int row = 0; row < table_->rowCount(); ++row) {
+        bool matches = filterText.isEmpty();
+        if (!matches) {
+            for (int column = 0; column < table_->columnCount(); ++column) {
+                auto *item = table_->item(row, column);
+                if (item != nullptr && item->text().contains(filterText, Qt::CaseInsensitive)) {
+                    matches = true;
+                    break;
+                }
+            }
+        }
+        table_->setRowHidden(row, !matches);
+    }
+
+    if (sortCombo_ != nullptr) {
+        table_->setSortingEnabled(true);
+        table_->sortItems(sortCombo_->currentIndex(), Qt::AscendingOrder);
+        table_->setSortingEnabled(false);
+    }
+    updateEmptyState();
 }

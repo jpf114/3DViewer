@@ -19,6 +19,8 @@
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QLabel>
+#include <QLineEdit>
+#include <QComboBox>
 
 #include "app/ApplicationController.h"
 #include "app/MainWindow.h"
@@ -96,6 +98,8 @@ int main(int argc, char **argv) {
     auto *measurementResultsDock = window.findChild<MeasurementResultsDock *>("measurementResultsDock");
     auto *measurementResultsTable = window.findChild<QTableWidget *>("measurementResultsTable");
     auto *measurementResultsEmptyStateLabel = window.findChild<QLabel *>("measurementResultsEmptyStateLabel");
+    auto *measurementResultsFilterEdit = window.findChild<QLineEdit *>("measurementResultsFilterEdit");
+    auto *measurementResultsSortCombo = window.findChild<QComboBox *>("measurementResultsSortCombo");
     auto *measurementResultsBulkDeleteAction = window.findChild<QAction *>("measurementResultsBulkDeleteAction");
     auto *measurementResultsBulkExportAction = window.findChild<QAction *>("measurementResultsBulkExportAction");
     if (!require(editAction != nullptr && exportAction != nullptr &&
@@ -103,6 +107,7 @@ int main(int argc, char **argv) {
                      deleteSelectedMeasurementAction != nullptr && clearAllMeasurementsAction != nullptr &&
                      measurementResultsDock != nullptr && measurementResultsTable != nullptr &&
                      measurementResultsEmptyStateLabel != nullptr &&
+                     measurementResultsFilterEdit != nullptr && measurementResultsSortCombo != nullptr &&
                      measurementResultsBulkDeleteAction != nullptr && measurementResultsBulkExportAction != nullptr &&
                      openProjectAction != nullptr && saveProjectAction != nullptr &&
                      saveProjectAsAction != nullptr,
@@ -126,12 +131,38 @@ int main(int argc, char **argv) {
                                            "Measure 1",
                                            MeasurementKind::Distance,
                                            "1.000 km");
-    if (!require(measurementResultsTable->rowCount() == 1,
+    window.addOrUpdateMeasurementResultRow("measurement-2",
+                                           "Area 2",
+                                           MeasurementKind::Area,
+                                           "500.0 m²");
+    if (!require(measurementResultsTable->rowCount() == 2,
                  "measurement results table should show newly added measurement rows")) {
         return EXIT_FAILURE;
     }
     if (!require(measurementResultsEmptyStateLabel->isHidden() && !measurementResultsTable->isHidden(),
                  "measurement results dock should hide the empty state after adding a measurement")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementResultsSortCombo->count() == 3,
+                 "measurement results dock should expose common sort modes")) {
+        return EXIT_FAILURE;
+    }
+    measurementResultsFilterEdit->setText("area");
+    int visibleMeasurementResultRows = 0;
+    for (int row = 0; row < measurementResultsTable->rowCount(); ++row) {
+        if (!measurementResultsTable->isRowHidden(row)) {
+            ++visibleMeasurementResultRows;
+        }
+    }
+    if (!require(visibleMeasurementResultRows == 1,
+                 "measurement results filter should hide rows that do not match the search text")) {
+        return EXIT_FAILURE;
+    }
+    measurementResultsFilterEdit->clear();
+    measurementResultsSortCombo->setCurrentIndex(0);
+    if (!require(measurementResultsTable->item(0, 0) != nullptr &&
+                     measurementResultsTable->item(0, 0)->text() == "Area 2",
+                 "measurement results sort should keep rows ordered by the selected column")) {
         return EXIT_FAILURE;
     }
     window.selectMeasurementResultRow("measurement-1");
@@ -145,8 +176,13 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     window.removeMeasurementResultRow("measurement-1");
-    if (!require(measurementResultsTable->rowCount() == 0,
+    if (!require(measurementResultsTable->rowCount() == 1,
                  "measurement results table should remove deleted measurement rows")) {
+        return EXIT_FAILURE;
+    }
+    window.removeMeasurementResultRow("measurement-2");
+    if (!require(measurementResultsTable->rowCount() == 0,
+                 "measurement results table should remove the final deleted measurement row")) {
         return EXIT_FAILURE;
     }
     if (!require(!measurementResultsEmptyStateLabel->isHidden() && measurementResultsTable->isHidden(),

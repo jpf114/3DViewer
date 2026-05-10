@@ -4,7 +4,9 @@
 #include <QStringList>
 
 class QAction;
+class QComboBox;
 class QLabel;
+class QLineEdit;
 class QTableWidget;
 enum class MeasurementKind;
 
@@ -41,7 +43,10 @@ private:
     int rowForLayerId(const QString &layerId) const;
     void updateActionStates();
     void updateEmptyState();
+    void applyFilterAndSort();
 
+    QLineEdit *filterEdit_;
+    QComboBox *sortCombo_;
     QLabel *emptyStateLabel_;
     QTableWidget *table_;
     QAction *zoomAction_;
