@@ -4,6 +4,7 @@
 #include <QStringList>
 
 class QAction;
+class QLabel;
 class QTableWidget;
 enum class MeasurementKind;
 
@@ -39,7 +40,9 @@ signals:
 private:
     int rowForLayerId(const QString &layerId) const;
     void updateActionStates();
+    void updateEmptyState();
 
+    QLabel *emptyStateLabel_;
     QTableWidget *table_;
     QAction *zoomAction_;
     QAction *editAction_;

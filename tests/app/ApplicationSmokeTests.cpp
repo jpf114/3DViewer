@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QItemSelectionModel>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMetaObject>
@@ -94,12 +95,14 @@ int main(int argc, char **argv) {
     auto *saveProjectAsAction = window.findChild<QAction *>("saveProjectAsAction");
     auto *measurementResultsDock = window.findChild<MeasurementResultsDock *>("measurementResultsDock");
     auto *measurementResultsTable = window.findChild<QTableWidget *>("measurementResultsTable");
+    auto *measurementResultsEmptyStateLabel = window.findChild<QLabel *>("measurementResultsEmptyStateLabel");
     auto *measurementResultsBulkDeleteAction = window.findChild<QAction *>("measurementResultsBulkDeleteAction");
     auto *measurementResultsBulkExportAction = window.findChild<QAction *>("measurementResultsBulkExportAction");
     if (!require(editAction != nullptr && exportAction != nullptr &&
                      undoAction != nullptr && clearAction != nullptr &&
                      deleteSelectedMeasurementAction != nullptr && clearAllMeasurementsAction != nullptr &&
                      measurementResultsDock != nullptr && measurementResultsTable != nullptr &&
+                     measurementResultsEmptyStateLabel != nullptr &&
                      measurementResultsBulkDeleteAction != nullptr && measurementResultsBulkExportAction != nullptr &&
                      openProjectAction != nullptr && saveProjectAction != nullptr &&
                      saveProjectAsAction != nullptr,
@@ -115,12 +118,20 @@ int main(int argc, char **argv) {
                  "measurement results bulk actions should be disabled initially")) {
         return EXIT_FAILURE;
     }
+    if (!require(!measurementResultsEmptyStateLabel->isHidden() && measurementResultsTable->isHidden(),
+                 "measurement results dock should show an empty state before any measurement exists")) {
+        return EXIT_FAILURE;
+    }
     window.addOrUpdateMeasurementResultRow("measurement-1",
                                            "Measure 1",
                                            MeasurementKind::Distance,
                                            "1.000 km");
     if (!require(measurementResultsTable->rowCount() == 1,
                  "measurement results table should show newly added measurement rows")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementResultsEmptyStateLabel->isHidden() && !measurementResultsTable->isHidden(),
+                 "measurement results dock should hide the empty state after adding a measurement")) {
         return EXIT_FAILURE;
     }
     window.selectMeasurementResultRow("measurement-1");
@@ -136,6 +147,10 @@ int main(int argc, char **argv) {
     window.removeMeasurementResultRow("measurement-1");
     if (!require(measurementResultsTable->rowCount() == 0,
                  "measurement results table should remove deleted measurement rows")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(!measurementResultsEmptyStateLabel->isHidden() && measurementResultsTable->isHidden(),
+                 "measurement results dock should restore the empty state after removing all rows")) {
         return EXIT_FAILURE;
     }
     if (!require(saveProjectAction->shortcut() == QKeySequence(Qt::CTRL | Qt::Key_S),

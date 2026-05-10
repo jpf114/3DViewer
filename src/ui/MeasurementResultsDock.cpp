@@ -2,6 +2,8 @@
 
 #include <QAction>
 #include <QHeaderView>
+#include <QLabel>
+#include <QMenu>
 #include <QSignalBlocker>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -26,6 +28,7 @@ QString measurementKindText(MeasurementKind kind) {
 
 MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     : QDockWidget(QString::fromUtf8(u8"量测成果"), parent),
+      emptyStateLabel_(new QLabel(this)),
       table_(new QTableWidget(this)),
       zoomAction_(nullptr),
       editAction_(nullptr),
@@ -88,6 +91,7 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setAlternatingRowColors(true);
     table_->setSortingEnabled(false);
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
     table_->verticalHeader()->setVisible(false);
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -96,6 +100,29 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this]() {
         updateActionStates();
         emit currentResultChanged(currentResultId());
+    });
+    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem *item) {
+        if (item == nullptr) {
+            return;
+        }
+        const QString layerId = item->data(kLayerIdRole).toString();
+        if (!layerId.isEmpty()) {
+            emit zoomRequested(layerId);
+        }
+    });
+    connect(table_, &QTableWidget::customContextMenuRequested, this, [this, &icons, toolColor](const QPoint &pos) {
+        if (selectedResultIds().isEmpty()) {
+            return;
+        }
+
+        QMenu menu(this);
+        menu.addAction(icons.icon("magnifying-glass-plus-regular.svg", 16, toolColor), QString::fromUtf8(u8"定位"), zoomAction_, &QAction::trigger);
+        menu.addAction(icons.icon("ruler-regular.svg", 16, toolColor), QString::fromUtf8(u8"编辑"), editAction_, &QAction::trigger);
+        menu.addAction(icons.icon("minus-circle-regular.svg", 16, toolColor), QString::fromUtf8(u8"删除"), deleteAction_, &QAction::trigger);
+        menu.addSeparator();
+        menu.addAction(icons.icon("trash-regular.svg", 16, toolColor), QString::fromUtf8(u8"批量删除"), bulkDeleteAction_, &QAction::trigger);
+        menu.addAction(icons.icon("export-regular.svg", 16, toolColor), QString::fromUtf8(u8"批量导出"), bulkExportAction_, &QAction::trigger);
+        menu.exec(table_->viewport()->mapToGlobal(pos));
     });
     connect(zoomAction_, &QAction::triggered, this, [this]() {
         const QString layerId = currentResultId();
@@ -128,9 +155,17 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
         }
     });
 
+    emptyStateLabel_->setObjectName("measurementResultsEmptyStateLabel");
+    emptyStateLabel_->setAlignment(Qt::AlignCenter);
+    emptyStateLabel_->setWordWrap(true);
+    emptyStateLabel_->setMargin(24);
+    emptyStateLabel_->setText(QString::fromUtf8(u8"暂无量测成果。\n开始测距或测面后，结果会显示在这里。"));
+
     layout->addWidget(toolbar);
+    layout->addWidget(emptyStateLabel_);
     layout->addWidget(table_);
     setWidget(container);
+    updateEmptyState();
 }
 
 QTableWidget *MeasurementResultsDock::table() const {
@@ -156,6 +191,7 @@ void MeasurementResultsDock::addOrUpdateResult(const MeasurementResultItemData &
     table_->item(row, 1)->setText(measurementKindText(item.kind));
     table_->item(row, 2)->setText(item.summary);
     updateActionStates();
+    updateEmptyState();
 }
 
 void MeasurementResultsDock::removeResult(const QString &layerId) {
@@ -164,11 +200,13 @@ void MeasurementResultsDock::removeResult(const QString &layerId) {
         table_->removeRow(row);
     }
     updateActionStates();
+    updateEmptyState();
 }
 
 void MeasurementResultsDock::clearResults() {
     table_->setRowCount(0);
     updateActionStates();
+    updateEmptyState();
 }
 
 void MeasurementResultsDock::selectResult(const QString &layerId) {
@@ -237,5 +275,15 @@ void MeasurementResultsDock::updateActionStates() {
     }
     if (bulkExportAction_ != nullptr) {
         bulkExportAction_->setEnabled(count >= 1);
+    }
+}
+
+void MeasurementResultsDock::updateEmptyState() {
+    const bool empty = table_->rowCount() == 0;
+    if (emptyStateLabel_ != nullptr) {
+        emptyStateLabel_->setVisible(empty);
+    }
+    if (table_ != nullptr) {
+        table_->setVisible(!empty);
     }
 }
