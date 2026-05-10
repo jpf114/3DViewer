@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
     auto *measurementResultsDock = window.findChild<MeasurementResultsDock *>("measurementResultsDock");
     auto *measurementResultsTable = window.findChild<QTableWidget *>("measurementResultsTable");
     auto *measurementResultsEmptyStateLabel = window.findChild<QLabel *>("measurementResultsEmptyStateLabel");
+    auto *measurementResultsSummaryLabel = window.findChild<QLabel *>("measurementResultsSummaryLabel");
     auto *measurementResultsFilterEdit = window.findChild<QLineEdit *>("measurementResultsFilterEdit");
     auto *measurementResultsSortCombo = window.findChild<QComboBox *>("measurementResultsSortCombo");
     auto *measurementResultsBulkDeleteAction = window.findChild<QAction *>("measurementResultsBulkDeleteAction");
@@ -106,7 +107,7 @@ int main(int argc, char **argv) {
                      undoAction != nullptr && clearAction != nullptr &&
                      deleteSelectedMeasurementAction != nullptr && clearAllMeasurementsAction != nullptr &&
                      measurementResultsDock != nullptr && measurementResultsTable != nullptr &&
-                     measurementResultsEmptyStateLabel != nullptr &&
+                     measurementResultsEmptyStateLabel != nullptr && measurementResultsSummaryLabel != nullptr &&
                      measurementResultsFilterEdit != nullptr && measurementResultsSortCombo != nullptr &&
                      measurementResultsBulkDeleteAction != nullptr && measurementResultsBulkExportAction != nullptr &&
                      openProjectAction != nullptr && saveProjectAction != nullptr &&
@@ -114,8 +115,8 @@ int main(int argc, char **argv) {
                  "measurement and project file actions should exist")) {
         return EXIT_FAILURE;
     }
-    if (!require(measurementResultsTable->columnCount() == 3,
-                 "measurement results table should expose name/type/summary columns")) {
+    if (!require(measurementResultsTable->columnCount() == 4,
+                 "measurement results table should expose name/type/summary/point-count columns")) {
         return EXIT_FAILURE;
     }
     if (!require(!measurementResultsBulkDeleteAction->isEnabled() &&
@@ -130,11 +131,13 @@ int main(int argc, char **argv) {
     window.addOrUpdateMeasurementResultRow("measurement-1",
                                            "Measure 1",
                                            MeasurementKind::Distance,
-                                           "1.000 km");
+                                           "1.000 km",
+                                           2);
     window.addOrUpdateMeasurementResultRow("measurement-2",
                                            "Area 2",
                                            MeasurementKind::Area,
-                                           "500.0 m²");
+                                           "500.0 m²",
+                                           3);
     if (!require(measurementResultsTable->rowCount() == 2,
                  "measurement results table should show newly added measurement rows")) {
         return EXIT_FAILURE;
@@ -143,8 +146,13 @@ int main(int argc, char **argv) {
                  "measurement results dock should hide the empty state after adding a measurement")) {
         return EXIT_FAILURE;
     }
-    if (!require(measurementResultsSortCombo->count() == 3,
+    if (!require(measurementResultsTable->columnCount() == 4 &&
+                     measurementResultsSortCombo->count() == 4,
                  "measurement results dock should expose common sort modes")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementResultsTable->item(0, 3) != nullptr,
+                 "measurement results table should expose point-count cells")) {
         return EXIT_FAILURE;
     }
     measurementResultsFilterEdit->setText("area");
@@ -158,10 +166,15 @@ int main(int argc, char **argv) {
                  "measurement results filter should hide rows that do not match the search text")) {
         return EXIT_FAILURE;
     }
+    if (!require(measurementResultsSummaryLabel->text().contains(QString::fromUtf8(u8"当前显示 1 条成果")) &&
+                     measurementResultsSummaryLabel->text().contains(QString::fromUtf8(u8"合计 3 个点")),
+                 "measurement results summary should reflect filtered row and point totals")) {
+        return EXIT_FAILURE;
+    }
     measurementResultsFilterEdit->clear();
-    measurementResultsSortCombo->setCurrentIndex(0);
+    measurementResultsSortCombo->setCurrentIndex(3);
     if (!require(measurementResultsTable->item(0, 0) != nullptr &&
-                     measurementResultsTable->item(0, 0)->text() == "Area 2",
+                     measurementResultsTable->item(0, 0)->text() == "Measure 1",
                  "measurement results sort should keep rows ordered by the selected column")) {
         return EXIT_FAILURE;
     }
@@ -173,6 +186,10 @@ int main(int argc, char **argv) {
     }
     if (!require(window.currentMeasurementResultId() == "measurement-1",
                  "selected measurement result id should reflect the current table selection")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(measurementResultsSummaryLabel->text().contains(QString::fromUtf8(u8"已选中 1 条")),
+                 "measurement results summary should reflect current selection count")) {
         return EXIT_FAILURE;
     }
     window.removeMeasurementResultRow("measurement-1");
@@ -236,7 +253,8 @@ int main(int argc, char **argv) {
     window.addOrUpdateMeasurementResultRow("measurement-1",
                                            "Measure 1",
                                            MeasurementKind::Distance,
-                                           "1.000 km");
+                                           "1.000 km",
+                                           2);
     window.showLayerProperties("measurement-1",
                                "Measure 1",
                                QString::fromUtf8(u8"量测"),
@@ -732,12 +750,14 @@ int main(int argc, char **argv) {
         "measurement-clear-a",
         "Measure A",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     clearMeasurementsWindow.addOrUpdateMeasurementResultRow(
         "measurement-clear-b",
         "Measure B",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     clearAllActionWindow->trigger();
     if (!require(clearMeasurementsLayerManager.layers().size() == 1 &&
                      clearMeasurementsLayerManager.layers().front()->id() == "vector-clear-1",
@@ -789,12 +809,14 @@ int main(int argc, char **argv) {
         "measurement-bulk-a",
         "Measure A",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     bulkRemoveWindow.addOrUpdateMeasurementResultRow(
         "measurement-bulk-b",
         "Measure B",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     bulkRemoveTable->selectionModel()->select(
         bulkRemoveTable->model()->index(0, 0),
         QItemSelectionModel::Select | QItemSelectionModel::Rows);
@@ -839,12 +861,14 @@ int main(int argc, char **argv) {
         "measurement-export-a",
         "Measure A",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     bulkExportWindow.addOrUpdateMeasurementResultRow(
         "measurement-export-b",
         "Measure A",
         MeasurementKind::Distance,
-        "1.000 km");
+        "1.000 km",
+        2);
     QTemporaryDir measurementExportDir;
     if (!require(measurementExportDir.isValid(), "measurement export temp directory should be created")) {
         return EXIT_FAILURE;

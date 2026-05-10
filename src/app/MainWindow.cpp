@@ -377,8 +377,8 @@ void MainWindow::clearLayerSelection() {
 }
 
 void MainWindow::addOrUpdateMeasurementResultRow(const QString &layerId, const QString &name,
-                                                 MeasurementKind kind, const QString &summary) {
-    measurementResultsDock_->addOrUpdateResult(MeasurementResultItemData{layerId, name, kind, summary});
+                                                 MeasurementKind kind, const QString &summary, int pointCount) {
+    measurementResultsDock_->addOrUpdateResult(MeasurementResultItemData{layerId, name, kind, summary, pointCount});
 }
 
 void MainWindow::removeMeasurementResultRow(const QString &layerId) {

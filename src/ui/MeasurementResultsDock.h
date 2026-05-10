@@ -15,6 +15,7 @@ struct MeasurementResultItemData {
     QString name;
     MeasurementKind kind;
     QString summary;
+    int pointCount = 0;
 };
 
 class MeasurementResultsDock : public QDockWidget {
@@ -44,10 +45,12 @@ private:
     void updateActionStates();
     void updateEmptyState();
     void applyFilterAndSort();
+    void updateSummaryLabel();
 
     QLineEdit *filterEdit_;
     QComboBox *sortCombo_;
     QLabel *emptyStateLabel_;
+    QLabel *summaryLabel_;
     QTableWidget *table_;
     QAction *zoomAction_;
     QAction *editAction_;

@@ -33,6 +33,7 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
       filterEdit_(new QLineEdit(this)),
       sortCombo_(new QComboBox(this)),
       emptyStateLabel_(new QLabel(this)),
+      summaryLabel_(new QLabel(this)),
       table_(new QTableWidget(this)),
       zoomAction_(nullptr),
       editAction_(nullptr),
@@ -63,6 +64,7 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     sortCombo_->addItem(QString::fromUtf8(u8"按名称"));
     sortCombo_->addItem(QString::fromUtf8(u8"按类型"));
     sortCombo_->addItem(QString::fromUtf8(u8"按摘要"));
+    sortCombo_->addItem(QString::fromUtf8(u8"按点数"));
     toolbar->addWidget(sortCombo_);
 
     toolbar->addSeparator();
@@ -99,11 +101,12 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     }
 
     table_->setObjectName("measurementResultsTable");
-    table_->setColumnCount(3);
+    table_->setColumnCount(4);
     table_->setHorizontalHeaderLabels({
         QString::fromUtf8(u8"名称"),
         QString::fromUtf8(u8"类型"),
-        QString::fromUtf8(u8"摘要")
+        QString::fromUtf8(u8"摘要"),
+        QString::fromUtf8(u8"点数")
     });
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -116,6 +119,7 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this]() {
         updateActionStates();
         emit currentResultChanged(currentResultId());
@@ -185,12 +189,16 @@ MeasurementResultsDock::MeasurementResultsDock(QWidget *parent)
     emptyStateLabel_->setWordWrap(true);
     emptyStateLabel_->setMargin(24);
     emptyStateLabel_->setText(QString::fromUtf8(u8"暂无量测成果。\n开始测距或测面后，结果会显示在这里。"));
+    summaryLabel_->setObjectName("measurementResultsSummaryLabel");
+    summaryLabel_->setMargin(8);
 
     layout->addWidget(toolbar);
     layout->addWidget(emptyStateLabel_);
     layout->addWidget(table_);
+    layout->addWidget(summaryLabel_);
     setWidget(container);
     updateEmptyState();
+    updateSummaryLabel();
 }
 
 QTableWidget *MeasurementResultsDock::table() const {
@@ -202,7 +210,7 @@ void MeasurementResultsDock::addOrUpdateResult(const MeasurementResultItemData &
     if (row < 0) {
         row = table_->rowCount();
         table_->insertRow(row);
-        for (int column = 0; column < 3; ++column) {
+        for (int column = 0; column < 4; ++column) {
             auto *cell = new QTableWidgetItem();
             if (column == 0) {
                 cell->setData(kLayerIdRole, item.layerId);
@@ -215,9 +223,11 @@ void MeasurementResultsDock::addOrUpdateResult(const MeasurementResultItemData &
     table_->item(row, 0)->setData(kLayerIdRole, item.layerId);
     table_->item(row, 1)->setText(measurementKindText(item.kind));
     table_->item(row, 2)->setText(item.summary);
+    table_->item(row, 3)->setData(Qt::DisplayRole, item.pointCount);
     applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
+    updateSummaryLabel();
 }
 
 void MeasurementResultsDock::removeResult(const QString &layerId) {
@@ -228,6 +238,7 @@ void MeasurementResultsDock::removeResult(const QString &layerId) {
     applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
+    updateSummaryLabel();
 }
 
 void MeasurementResultsDock::clearResults() {
@@ -235,6 +246,7 @@ void MeasurementResultsDock::clearResults() {
     applyFilterAndSort();
     updateActionStates();
     updateEmptyState();
+    updateSummaryLabel();
 }
 
 void MeasurementResultsDock::selectResult(const QString &layerId) {
@@ -304,6 +316,7 @@ void MeasurementResultsDock::updateActionStates() {
     if (bulkExportAction_ != nullptr) {
         bulkExportAction_->setEnabled(count >= 1);
     }
+    updateSummaryLabel();
 }
 
 void MeasurementResultsDock::updateEmptyState() {
@@ -349,4 +362,26 @@ void MeasurementResultsDock::applyFilterAndSort() {
         table_->setSortingEnabled(false);
     }
     updateEmptyState();
+    updateSummaryLabel();
+}
+
+void MeasurementResultsDock::updateSummaryLabel() {
+    int visibleCount = 0;
+    int selectedCount = selectedResultIds().size();
+    int visiblePoints = 0;
+    for (int row = 0; row < table_->rowCount(); ++row) {
+        if (table_->isRowHidden(row)) {
+            continue;
+        }
+        ++visibleCount;
+        if (auto *pointItem = table_->item(row, 3)) {
+            visiblePoints += pointItem->data(Qt::DisplayRole).toInt();
+        }
+    }
+
+    summaryLabel_->setText(
+        QString::fromUtf8(u8"当前显示 %1 条成果，合计 %2 个点，已选中 %3 条。")
+            .arg(visibleCount)
+            .arg(visiblePoints)
+            .arg(selectedCount));
 }

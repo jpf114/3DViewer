@@ -226,7 +226,8 @@ void syncMeasurementResult(MainWindow &window, const Layer &layer, const Measure
         QString::fromStdString(layer.id()),
         utf8(layer.name()),
         data.kind,
-        measurementLayerSummary(data));
+        measurementLayerSummary(data),
+        static_cast<int>(data.points.size()));
 }
 
 QString measurementLayerDisplayName(MeasurementKind kind, int index, const MeasurementLayerData &data) {

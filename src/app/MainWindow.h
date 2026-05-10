@@ -36,7 +36,7 @@ public:
     void selectLayerRow(const std::string &layerId);
     void clearLayerSelection();
     void addOrUpdateMeasurementResultRow(const QString &layerId, const QString &name,
-                                         MeasurementKind kind, const QString &summary);
+                                         MeasurementKind kind, const QString &summary, int pointCount);
     void removeMeasurementResultRow(const QString &layerId);
     void selectMeasurementResultRow(const QString &layerId);
     void clearMeasurementResultSelection();
