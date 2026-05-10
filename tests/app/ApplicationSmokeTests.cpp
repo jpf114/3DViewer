@@ -322,6 +322,22 @@ int main(int argc, char **argv) {
     if (!require(tree->topLevelItemCount() == 1, "adding first layer should replace placeholder")) {
         return EXIT_FAILURE;
     }
+    QString renamedLayerId;
+    QString renamedLayerName;
+    bool renameRequested = false;
+    QObject::connect(&layerDock, &LayerTreeDock::layerRenameRequested,
+                     [&renamedLayerId, &renamedLayerName, &renameRequested](const QString &layerId, const QString &name) {
+        renamedLayerId = layerId;
+        renamedLayerName = name;
+        renameRequested = true;
+    });
+    tree->topLevelItem(0)->setText(0, "Measure A");
+    if (!require(renameRequested &&
+                     renamedLayerId == "measurement-1" &&
+                     renamedLayerName == "Measure A",
+                 "editing tree item text should request layer rename")) {
+        return EXIT_FAILURE;
+    }
     layerDock.renameLayer("measurement-1", "Measure 1 (1.234 km)");
     if (!require(tree->topLevelItem(0)->text(0) == "Measure 1 (1.234 km)",
                  "renameLayer should update visible layer text")) {
@@ -627,6 +643,30 @@ int main(int argc, char **argv) {
                  "layer tree should refresh measurement summary after editing")) {
         return EXIT_FAILURE;
     }
+    measurementController.renameLayer(committedLayer->id(), "Manual Measurement");
+    if (!require(committedLayer->name() == "Manual Measurement",
+                 "renameLayer should update measurement layer name")) {
+        return EXIT_FAILURE;
+    }
+
+    MeasurementLayerData editedMeasurementWithCustomName = committedMeasurement;
+    editedMeasurementWithCustomName.targetLayerId = committedLayer->id();
+    editedMeasurementWithCustomName.points.push_back({123.0, 33.0});
+    editedMeasurementWithCustomName.lengthMeters = 3600.0;
+
+    const bool commitEditedWithCustomName = QMetaObject::invokeMethod(
+        measurementWindow.globeWidget(),
+        "measurementCommitted",
+        Qt::DirectConnection,
+        Q_ARG(MeasurementLayerData, editedMeasurementWithCustomName));
+    if (!require(commitEditedWithCustomName, "editing renamed measurement should still work")) {
+        return EXIT_FAILURE;
+    }
+    if (!require(committedLayer->name() == "Manual Measurement" &&
+                     measurementTree->topLevelItem(0)->text(0) == "Manual Measurement",
+                 "editing renamed measurement should preserve custom name")) {
+        return EXIT_FAILURE;
+    }
 
     QTemporaryDir projectDir;
     if (!require(projectDir.isValid(), "project temp directory should be created")) {
@@ -680,6 +720,7 @@ int main(int argc, char **argv) {
                  "project measurement layer should be added before saving")) {
         return EXIT_FAILURE;
     }
+    projectSaveController.renameLayer(projectMeasurementLayer->id(), "Project Measure");
     projectSaveWindow.addLayerRow(*projectMeasurementLayer);
 
     const QString projectFilePath = projectDir.filePath("demo.3dproj");
@@ -716,10 +757,11 @@ int main(int argc, char **argv) {
     }
     const auto restoredMeasurementLayer = projectOpenLayerManager.findById("measurement-project-1");
     if (!require(restoredMeasurementLayer != nullptr &&
+                     restoredMeasurementLayer->name() == "Project Measure" &&
                      restoredMeasurementLayer->measurementData().has_value() &&
                      restoredMeasurementLayer->measurementData()->points.size() == 2 &&
                      std::abs(restoredMeasurementLayer->measurementData()->lengthMeters - 1234.0) <= 1.0e-6,
-                 "openProject should restore measurement data")) {
+                 "openProject should restore measurement data and custom name")) {
         return EXIT_FAILURE;
     }
 

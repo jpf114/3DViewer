@@ -15,6 +15,7 @@ namespace {
 constexpr int kLayerIdRole = Qt::UserRole;
 constexpr int kLayerKindRole = Qt::UserRole + 1;
 constexpr int kPlaceholderRole = Qt::UserRole + 2;
+constexpr int kLayerNameRole = Qt::UserRole + 3;
 
 QString placeholderText() {
     return QString::fromUtf8(u8"暂无图层，可拖拽文件到窗口或使用“导入数据”。");
@@ -35,6 +36,13 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
 
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem *item, int) {
         if (item == nullptr || isPlaceholderItem(item)) {
+            return;
+        }
+        const QString currentName = item->text(0).trimmed();
+        const QString storedName = item->data(0, kLayerNameRole).toString();
+        if (!currentName.isEmpty() && currentName != storedName) {
+            item->setData(0, kLayerNameRole, currentName);
+            emit layerRenameRequested(item->data(0, kLayerIdRole).toString(), currentName);
             return;
         }
         emit layerVisibilityChanged(item->data(0, kLayerIdRole).toString(), item->checkState(0) == Qt::Checked);
@@ -70,6 +78,9 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
         QAction *zoomAction = menu.addAction(
             icons.icon("magnifying-glass-plus-regular.svg", 16, menuColor),
             QString::fromUtf8(u8"缩放到图层"));
+        QAction *renameAction = menu.addAction(
+            icons.icon("pencil-simple-regular.svg", 16, menuColor),
+            QString::fromUtf8(u8"重命名"));
         QAction *editMeasurementAction = nullptr;
         QAction *exportMeasurementAction = nullptr;
         if (kind == LayerKind::Measurement) {
@@ -90,6 +101,8 @@ LayerTreeDock::LayerTreeDock(QWidget *parent)
         QAction *chosen = menu.exec(tree_->mapToGlobal(pos));
         if (chosen == zoomAction) {
             emit zoomToLayerRequested(layerId);
+        } else if (chosen == renameAction) {
+            tree_->editItem(item, 0);
         } else if (chosen == editMeasurementAction) {
             emit editMeasurementRequested(layerId);
         } else if (chosen == exportMeasurementAction) {
@@ -132,7 +145,8 @@ void LayerTreeDock::addLayer(const std::string &id, const std::string &name, boo
     item->setText(0, QString::fromUtf8(name.c_str(), static_cast<int>(name.size())));
     item->setData(0, kLayerIdRole, QString::fromUtf8(id.c_str(), static_cast<int>(id.size())));
     item->setData(0, kLayerKindRole, static_cast<int>(kind));
-    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+    item->setData(0, kLayerNameRole, QString::fromUtf8(name.c_str(), static_cast<int>(name.size())));
+    item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
     item->setCheckState(0, visible ? Qt::Checked : Qt::Unchecked);
 
     if (kind == LayerKind::Imagery) {
@@ -157,7 +171,9 @@ void LayerTreeDock::renameLayer(const std::string &id, const std::string &name) 
             continue;
         }
         if (item->data(0, kLayerIdRole).toString() == qId) {
+            const QSignalBlocker blocker(tree_);
             item->setText(0, qName);
+            item->setData(0, kLayerNameRole, qName);
             return;
         }
     }

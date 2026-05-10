@@ -23,6 +23,7 @@ public:
 
     void importFile(const std::string &path);
     void showLayerDetails(const std::string &layerId);
+    void renameLayer(const std::string &layerId, const QString &name);
     void setLayerVisibility(const std::string &layerId, bool visible);
     void setLayerOpacity(const std::string &layerId, double opacity);
     void setModelPlacement(const std::string &layerId, const ModelPlacement &placement);

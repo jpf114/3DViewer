@@ -22,6 +22,7 @@ public:
 
 signals:
     void layerSelected(const QString &layerId);
+    void layerRenameRequested(const QString &layerId, const QString &name);
     void layerVisibilityChanged(const QString &layerId, bool visible);
     void layerOrderChanged(const QStringList &orderedLayerIds);
     void removeLayerRequested(const QString &layerId);

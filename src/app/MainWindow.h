@@ -52,6 +52,7 @@ signals:
     void openProjectRequested();
     void saveProjectRequested();
     void saveProjectAsRequested();
+    void layerRenameRequested(const QString &layerId, const QString &name);
     void layerSelected(const QString &layerId);
     void layerVisibilityChanged(const QString &layerId, bool visible);
     void layerOrderChanged(const QStringList &orderedLayerIds);

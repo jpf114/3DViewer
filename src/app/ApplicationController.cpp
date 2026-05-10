@@ -338,6 +338,10 @@ ApplicationController::ApplicationController(MainWindow &window,
         showLayerDetails(layerId.toStdString());
     });
 
+    QObject::connect(&window_, &MainWindow::layerRenameRequested, [this](const QString &layerId, const QString &name) {
+        renameLayer(layerId.toStdString(), name);
+    });
+
     QObject::connect(&window_, &MainWindow::layerVisibilityChanged, [this](const QString &layerId, bool visible) {
         setLayerVisibility(layerId.toStdString(), visible);
     });
@@ -629,6 +633,9 @@ bool ApplicationController::updateMeasurementLayer(const std::shared_ptr<Layer> 
         return false;
     }
 
+    const auto existingMeasurementData = layer->measurementData();
+    const std::string existingName = layer->name();
+
     if (!writeMeasurementGeoJson(utf8(layer->sourceUri()), data)) {
         return false;
     }
@@ -636,7 +643,12 @@ bool ApplicationController::updateMeasurementLayer(const std::shared_ptr<Layer> 
     MeasurementLayerData storedData = data;
     storedData.targetLayerId.clear();
     layer->setMeasurementData(storedData);
-    layer->setName(measurementLayerDisplayName(layerManager_, *layer, storedData).toUtf8().toStdString());
+    std::string resolvedName = existingName;
+    if (!existingMeasurementData.has_value() ||
+        existingName == measurementLayerDisplayName(layerManager_, *layer, *existingMeasurementData).toUtf8().toStdString()) {
+        resolvedName = measurementLayerDisplayName(layerManager_, *layer, storedData).toUtf8().toStdString();
+    }
+    layer->setName(resolvedName);
     if (const auto bounds = measurementBounds(storedData); bounds.has_value()) {
         layer->setGeographicBounds(*bounds);
     }
@@ -986,6 +998,25 @@ void ApplicationController::saveLayerConfigOnExit(const std::string &resourceDir
     }
 
     saveLayerConfig(resourceDir, config);
+}
+
+void ApplicationController::renameLayer(const std::string &layerId, const QString &name) {
+    const auto layer = layerManager_.findById(layerId);
+    if (!layer) {
+        return;
+    }
+
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty()) {
+        window_.renameLayerRow(layerId, layer->name());
+        return;
+    }
+
+    layer->setName(trimmed.toStdString());
+    window_.renameLayerRow(layerId, layer->name());
+    if (window_.currentLayerId().toStdString() == layerId) {
+        showLayerDetails(layerId);
+    }
 }
 
 bool ApplicationController::saveProject(const QString &path) {

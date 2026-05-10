@@ -255,6 +255,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     connect(layerDock_, &LayerTreeDock::layerSelected, this, &MainWindow::layerSelected);
+    connect(layerDock_, &LayerTreeDock::layerRenameRequested, this, &MainWindow::layerRenameRequested);
     connect(layerDock_, &LayerTreeDock::layerVisibilityChanged, this, &MainWindow::layerVisibilityChanged);
     connect(layerDock_, &LayerTreeDock::layerOrderChanged, this, &MainWindow::layerOrderChanged);
     connect(layerDock_, &LayerTreeDock::removeLayerRequested, this, &MainWindow::removeLayerRequested);
